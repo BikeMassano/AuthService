@@ -1,2 +1,2 @@
 pub mod login_request;
-mod registrarion_request;
+pub mod registrarion_request;
