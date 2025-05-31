@@ -1,15 +1,13 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use crate::application::jwt_provider::JwtProvider;
-use crate::application::password_hasher::PasswordHasher;
-use crate::domain::claims::Claims;
-use crate::domain::enums::roles::Role;
-use crate::infrastructure::argon2_password_hasher::Argon2PasswordHasher;
-use crate::infrastructure::bcrypt_password_hasher::BcryptPasswordHasher;
-use crate::infrastructure::hmac_jwt_provider::HmacJwtProvider;
-use crate::presentation::requests::login_request::LoginRequest;
-use crate::presentation::responses::login_response::LoginResponse;
+
+use crate::{
+    application::{jwt_provider::JwtProvider, password_hasher::PasswordHasher},
+    domain::{claims::Claims, enums::roles::Role},
+    infrastructure::{argon2_password_hasher::Argon2PasswordHasher, bcrypt_password_hasher::BcryptPasswordHasher, hmac_jwt_provider::HmacJwtProvider},
+    presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
+};
 
 pub async fn login_handler(Json(login_request) : Json<LoginRequest>)
                            -> Result<Json<LoginResponse>, StatusCode> {
@@ -45,7 +43,6 @@ fn is_valid_user(username: &str, password: &str) -> bool {
     
     let hasher = Argon2PasswordHasher;
     let password_hash = "$argon2id$v=19$m=65536,t=3,p=2$iJJTyO0Bk8wfzJMLlmriSA$NW6tlkHWO3k2GHRaac4iWXkXOSiv34A6X1pzc01zLqQ";
-    println!("pass_hash: {}", password_hash);
     // Сравнение
     hasher.verify_password(password, password_hash.as_ref())
 }

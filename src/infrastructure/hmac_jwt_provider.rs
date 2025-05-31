@@ -1,9 +1,11 @@
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError};
 use sea_orm::ActiveEnum;
-use crate::application::jwt_provider::JwtProvider;
-use crate::domain::claims::Claims;
-use crate::domain::enums::roles::Role;
-use jsonwebtoken::errors::Error as JwtError;
+
+
+use crate::{
+    application::jwt_provider::JwtProvider,
+    domain::{claims::Claims, enums::roles::Role},
+};
 
 pub struct HmacJwtProvider;
 

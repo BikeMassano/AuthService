@@ -1,6 +1,6 @@
-use crate::domain::enums::roles::Role;
 use jsonwebtoken::errors::Error as JwtError;
 
+use crate::domain::enums::roles::Role;
 /// Интерфейс для создания Json Web Tokens
 ///
 /// Этот трейт предоставляет методы генерации Json Web Tokens.

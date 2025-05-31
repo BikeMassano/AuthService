@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+
 use crate::domain::enums::roles::Role;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
