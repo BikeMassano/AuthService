@@ -1,5 +1,7 @@
+use std::env;
 use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError};
 use sea_orm::ActiveEnum;
+use dotenv::dotenv;
 
 
 use crate::{
@@ -7,7 +9,13 @@ use crate::{
     domain::{claims::Claims, enums::roles::Role},
 };
 
-pub struct HmacJwtProvider;
+pub struct HmacJwtProvider {
+    secret_key: String,
+}
+
+impl HmacJwtProvider {
+    pub fn new(secret_key: String) -> Self { Self { secret_key } }
+}
 
 impl JwtProvider for HmacJwtProvider {
     fn generate_token(&self, username: &str, role: &Role) -> Result<String, JwtError> {
@@ -21,7 +29,8 @@ impl JwtProvider for HmacJwtProvider {
         let token = encode(
             &Header::default(), 
             &claims, 
-            &EncodingKey::from_secret("secret".as_ref()))?;
+            &EncodingKey::from_secret(self.secret_key.as_bytes(),
+        ))?;
         
         Ok(token)
     }

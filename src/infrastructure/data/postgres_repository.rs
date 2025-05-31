@@ -9,9 +9,7 @@ pub struct PostgresUserRepository {
 }
 
 impl PostgresUserRepository {
-    pub fn new(db: DatabaseConnection) -> PostgresUserRepository {
-        PostgresUserRepository { db }
-    }
+    pub fn new(db: DatabaseConnection) -> Self { Self { db } }
 }
 
 #[async_trait]

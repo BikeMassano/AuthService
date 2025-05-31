@@ -3,7 +3,7 @@ use sea_orm::prelude::async_trait::async_trait;
 use crate::domain::entities::users;
 
 #[async_trait]
-pub trait UserRepository {
+pub trait UserRepository: Send + Sync {
     async fn find_by_name(&self, name: &str) -> Result<users::Model, sqlx::Error>;
     async fn find_by_id(&self, id: i32) -> Result<users::Model, sqlx::Error>;
     async fn find_by_email(&self, email: &str) -> Result<users::Model, sqlx::Error>;

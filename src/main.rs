@@ -1,17 +1,42 @@
+use std::env;
+use std::sync::Arc;
 use axum::Router;
 use axum::routing::{get, post};
+use dotenv::dotenv;
+use crate::app_state::AppState;
+use crate::application::jwt_provider::JwtProvider;
+use crate::application::password_hasher::PasswordHasher;
+use crate::infrastructure::argon2_password_hasher::Argon2PasswordHasher;
+use crate::infrastructure::hmac_jwt_provider::HmacJwtProvider;
 use crate::presentation::controller::{get_info_handler, login_handler};
 
 mod presentation;
 mod domain;
 mod application;
 mod infrastructure;
+mod app_state;
 
 #[tokio::main]
 async fn main() {
+    // Загружаем переменные окружения
+    dotenv().ok();
+    // Получаем секретный ключ для JWT
+    let secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    // Инстанцируем сервисы
+    let jwt_provider: Arc<dyn JwtProvider> = Arc::new(HmacJwtProvider::new(secret));
+    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher);
+
+    // Внедряем сервисы в контейнер зависимостей
+    let app_state = AppState {
+        jwt_provider,
+        password_hasher,
+    };
+    
     let app = Router::new()
         .route("/login", post(login_handler))
-        .route("/info", get(get_info_handler));
+        .route("/info", get(get_info_handler))
+        
+        .with_state(app_state);
 
     let listener =
     tokio::net::TcpListener::bind(("127.0.0.1", 8080))

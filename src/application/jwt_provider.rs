@@ -4,7 +4,7 @@ use crate::domain::enums::roles::Role;
 /// Интерфейс для создания Json Web Tokens
 ///
 /// Этот трейт предоставляет методы генерации Json Web Tokens.
-pub trait JwtProvider {
+pub trait JwtProvider: Send + Sync {
     /// Генерирует JWT на основе имени пользователя и роли.
     ///
     /// # Параметры
