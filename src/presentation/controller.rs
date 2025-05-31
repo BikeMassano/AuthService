@@ -1,7 +1,13 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, DecodingKey, Validation};
+use crate::application::jwt_provider::JwtProvider;
+use crate::application::password_hasher::PasswordHasher;
 use crate::domain::claims::Claims;
+use crate::domain::enums::roles::Role;
+use crate::infrastructure::argon2_password_hasher::Argon2PasswordHasher;
+use crate::infrastructure::bcrypt_password_hasher::BcryptPasswordHasher;
+use crate::infrastructure::hmac_jwt_provider::HmacJwtProvider;
 use crate::presentation::requests::login_request::LoginRequest;
 use crate::presentation::responses::login_response::LoginResponse;
 
@@ -13,13 +19,10 @@ pub async fn login_handler(Json(login_request) : Json<LoginRequest>)
     let is_valid = is_valid_user(username, password);
 
     if is_valid {
-        let claims = Claims {
-            sub: username.clone(),
-            role: "".to_string(),
-            exp: (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp(),
-        };
+        
+        let jwt_provider = HmacJwtProvider;
 
-        let token = match encode(&Header::default(), &claims, &EncodingKey::from_secret("secret".as_ref())) {
+        let token = match jwt_provider.generate_token(username, &Role::GUEST) {
             Ok(token) => token,
             Err(e) => {
                 eprintln!("Failed to encode token: {}", e);
@@ -36,9 +39,15 @@ pub async fn login_handler(Json(login_request) : Json<LoginRequest>)
 
 fn is_valid_user(username: &str, password: &str) -> bool {
     // Имитируем получение хэша пароля из БД
-    let password_hash = bcrypt::hash("secret", bcrypt::DEFAULT_COST).unwrap();
+    
+    // let hasher = BcryptPasswordHasher;
+    // let password_hash = "$2b$12$.dTGuvJDSh9YPd7iek1s/.ZQdE8aZdfFAQFSYViD.cvge3VRs9eg6";
+    
+    let hasher = Argon2PasswordHasher;
+    let password_hash = "$argon2id$v=19$m=65536,t=3,p=2$iJJTyO0Bk8wfzJMLlmriSA$NW6tlkHWO3k2GHRaac4iWXkXOSiv34A6X1pzc01zLqQ";
+    println!("pass_hash: {}", password_hash);
     // Сравнение
-    bcrypt::verify(password, password_hash.as_str()).unwrap_or(false)
+    hasher.verify_password(password, password_hash.as_ref())
 }
 pub async fn get_info_handler(header_map: HeaderMap) -> Result<Json<String>, StatusCode> {
     if let Some(auth_header) = header_map.get("Authorization") {
