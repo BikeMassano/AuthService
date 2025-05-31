@@ -1,5 +1,5 @@
 use std::env;
-use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError};
+use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError, DecodingKey, Validation};
 use sea_orm::ActiveEnum;
 use dotenv::dotenv;
 
@@ -33,5 +33,15 @@ impl JwtProvider for HmacJwtProvider {
         ))?;
         
         Ok(token)
+    }
+
+    fn decode_token(&self, token: &str) -> Result<Claims, JwtError> {
+        jsonwebtoken::decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(self.secret_key.as_bytes()),
+            &Validation::default(),
+        )
+        .map(|data| data.claims)
+        .map_err(|e| e.into())
     }
 }

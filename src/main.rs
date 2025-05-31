@@ -4,7 +4,7 @@ use axum::Router;
 use axum::routing::{get, post};
 use dotenv::dotenv;
 use sea_orm::Database;
-use crate::app_state::AppState;
+use infrastructure::app_state::AppState;
 use crate::application::jwt_provider::JwtProvider;
 use crate::application::password_hasher::PasswordHasher;
 use crate::application::repositories::user_repository::UserRepository;
@@ -17,7 +17,6 @@ mod presentation;
 mod domain;
 mod application;
 mod infrastructure;
-mod app_state;
 
 #[tokio::main]
 async fn main() {

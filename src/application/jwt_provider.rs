@@ -1,5 +1,5 @@
 use jsonwebtoken::errors::Error as JwtError;
-
+use crate::domain::claims::Claims;
 use crate::domain::enums::roles::Role;
 /// Интерфейс для создания Json Web Tokens
 ///
@@ -15,4 +15,5 @@ pub trait JwtProvider: Send + Sync {
     /// * `Result` со строкой, содержащей сгенерированный JWT в случае успеха,
     /// либо ошибку типа `JwtError` при неудаче.  
     fn generate_token(&self, username: &str, role: &Role) -> Result<String, JwtError>;
+    fn decode_token(&self, token: &str) -> Result<Claims, JwtError>;
 }
