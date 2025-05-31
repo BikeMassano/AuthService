@@ -30,7 +30,7 @@ async fn main() {
     // Установить соединение с базой данных
     let db_connection = Database::connect(&db_url).await
         .expect("Failed to connect to database");
-    
+
     // Инстанцируем сервисы
     let jwt_provider: Arc<dyn JwtProvider> = Arc::new(HmacJwtProvider::new(secret));
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher);
@@ -42,11 +42,11 @@ async fn main() {
         password_hasher,
         user_repository,
     };
-    
+
     let app = Router::new()
         .route("/login", post(login_handler))
         .route("/info", get(get_info_handler))
-        
+
         .with_state(app_state);
 
     let listener =
