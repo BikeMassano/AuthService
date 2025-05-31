@@ -40,6 +40,7 @@ async fn main() {
     let app_state = AppState {
         jwt_provider,
         password_hasher,
+        user_repository,
     };
     
     let app = Router::new()
