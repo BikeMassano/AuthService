@@ -1,25 +1,76 @@
+use std::hash::Hash;
 use std::sync::Arc;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
+use sea_orm::DbErr;
 
 use crate::{
     application::{password_hasher::PasswordHasher},
     domain::{enums::roles::Role},
     presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
 };
+use crate::application::repositories::user_repository::UserRepository;
+use crate::domain::entities::users::Model;
 use crate::infrastructure::app_state::AppState;
+use crate::presentation::requests::registration_request::RegistrationRequest;
+
+pub async fn registration_handler(
+    State(state): State<Arc<AppState>>,
+    Json(registration_request): Json<RegistrationRequest>,
+) -> Result<Json<String>, StatusCode> {
+    let username = registration_request.username;
+    let password = registration_request.password;
+    let email = registration_request.email;
+
+    let password_hash = state.password_hasher.hash_password(&password);
+
+    match state.user_repository.create(username, email, password_hash).await {
+        Ok(_) => {
+            let info = "You are registered".to_string();
+            Ok(Json(info))
+        }
+        Err(_) => { 
+            Err(StatusCode::INTERNAL_SERVER_ERROR) 
+        }
+    }
+}
 
 pub async fn login_handler(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(login_request) : Json<LoginRequest>
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let username = &login_request.username;
+    // Поиск пользователя по имени
+    let user_repository = &state.user_repository;
+    
+    let user = match user_repository.find_by_name(&login_request.username).await {
+        Ok(user) => user,
+        // Если не найден по имени, ищем по email
+        Err(DbErr::RecordNotFound(_)) => match user_repository.find_by_email(&login_request.username).await {
+            Ok(user) => user,
+            // Не найден ни по имени, ни по email
+            Err(DbErr::RecordNotFound(_)) => {
+                eprintln!("User {} not found", &login_request.username);
+                return Err(StatusCode::NOT_FOUND);
+            },
+            Err(err) => {
+                eprintln!("Failed to find user {}: {}", &login_request.username, err);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            },
+        },
+        Err(err) => {
+            eprintln!("Failed to find user {}: {}", &login_request.username, err);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    
+    let username = &user.username;
     let password = &login_request.password;
 
-    let is_valid_user = is_valid_user(username, password, &state.password_hasher);
+    let is_valid = is_valid_user(&user.clone(), password, &state.password_hasher);
 
-    if is_valid_user {
+    if is_valid {
 
         let token = match state.jwt_provider.generate_token(username, &Role::GUEST) {
             Ok(token) => token,
@@ -36,15 +87,17 @@ pub async fn login_handler(
     }
 }
 
-fn is_valid_user(username: &str, password: &str,
-    password_hasher: &Arc<dyn PasswordHasher>) -> bool {
-    // Имитируем получение хэша пароля из БД
-    let password_hash = "$argon2id$v=19$m=65536,t=3,p=2$iJJTyO0Bk8wfzJMLlmriSA$NW6tlkHWO3k2GHRaac4iWXkXOSiv34A6X1pzc01zLqQ";
+fn is_valid_user(
+    user: &Model, password: &str, 
+    password_hasher: &Arc<dyn PasswordHasher>,
+) -> bool {
+    // получаем захэшированный пароль
+    let password_hash = &user.password_hash;
     // Сравнение
     password_hasher.verify_password(password, password_hash.as_ref())
 }
 pub async fn get_info_handler(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     header_map: HeaderMap
 ) -> Result<Json<String>, StatusCode> {
     if let Some(auth_header) = header_map.get("Authorization") {

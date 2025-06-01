@@ -11,7 +11,7 @@ use crate::application::repositories::user_repository::UserRepository;
 use crate::infrastructure::argon2_password_hasher::Argon2PasswordHasher;
 use crate::infrastructure::data::pg_user_repository::PostgresUserRepository;
 use crate::infrastructure::hmac_jwt_provider::HmacJwtProvider;
-use crate::presentation::controller::{get_info_handler, login_handler};
+use crate::presentation::controller::{get_info_handler, login_handler, registration_handler};
 
 mod presentation;
 mod domain;
@@ -36,14 +36,15 @@ async fn main() {
     let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(db_connection));
 
     // Внедряем сервисы в контейнер зависимостей
-    let app_state = AppState {
+    let app_state = Arc::new(AppState {
         jwt_provider,
         password_hasher,
         user_repository,
-    };
+    });
 
     let app = Router::new()
         .route("/login", post(login_handler))
+        .route("/registration", post(registration_handler))
         .route("/info", get(get_info_handler))
 
         .with_state(app_state);

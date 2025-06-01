@@ -27,7 +27,7 @@ impl JwtProvider for HmacJwtProvider {
 
         // вынести секретный ключ!
         let token = encode(
-            &Header::default(), 
+            &Header::default(),
             &claims, 
             &EncodingKey::from_secret(self.secret_key.as_bytes(),
         ))?;
