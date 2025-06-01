@@ -1,4 +1,3 @@
-use std::hash::Hash;
 use std::sync::Arc;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
@@ -10,7 +9,7 @@ use crate::{
     domain::{enums::roles::Role},
     presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
 };
-use crate::application::repositories::user_repository::UserRepository;
+
 use crate::domain::entities::users::Model;
 use crate::infrastructure::app_state::AppState;
 use crate::presentation::requests::registration_request::RegistrationRequest;
@@ -22,16 +21,24 @@ pub async fn registration_handler(
     let username = registration_request.username;
     let password = registration_request.password;
     let email = registration_request.email;
+    let password_hasher = state.password_hasher.clone();
 
-    let password_hash = state.password_hasher.hash_password(&password);
+    
+    let password_hash = match tokio::task::spawn_blocking(move || {
+        password_hasher.hash_password(&password)
+    })
+    .await{
+        Ok(hash) => hash,
+        Err(_) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
+    };
 
     match state.user_repository.create(username, email, password_hash).await {
         Ok(_) => {
             let info = "You are registered".to_string();
             Ok(Json(info))
         }
-        Err(_) => { 
-            Err(StatusCode::INTERNAL_SERVER_ERROR) 
+        Err(_) => {
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
@@ -42,7 +49,7 @@ pub async fn login_handler(
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // Поиск пользователя по имени
     let user_repository = &state.user_repository;
-    
+
     let user = match user_repository.find_by_name(&login_request.username).await {
         Ok(user) => user,
         // Если не найден по имени, ищем по email
@@ -63,14 +70,14 @@ pub async fn login_handler(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    
-    
+
+
     let username = &user.username;
     let password = &login_request.password;
 
-    let is_valid = is_valid_user(&user.clone(), password, &state.password_hasher);
+    let is_valid = is_valid_user(&user, password, &state.password_hasher);
 
-    if is_valid {
+    if is_valid.await {
 
         let token = match state.jwt_provider.generate_token(username, &Role::GUEST) {
             Ok(token) => token,
@@ -87,14 +94,21 @@ pub async fn login_handler(
     }
 }
 
-fn is_valid_user(
-    user: &Model, password: &str, 
+async fn is_valid_user(
+    user: &Model, 
+    password: &str,
     password_hasher: &Arc<dyn PasswordHasher>,
 ) -> bool {
     // получаем захэшированный пароль
-    let password_hash = &user.password_hash;
+    let password_hash = user.password_hash.clone();
+    let password = password.to_owned();
+    let password_hasher = password_hasher.clone();
     // Сравнение
-    password_hasher.verify_password(password, password_hash.as_ref())
+    tokio::task::spawn_blocking(move || {
+        password_hasher.verify_password(&password, password_hash.as_ref())
+    })
+    .await
+    .unwrap_or(false)
 }
 pub async fn get_info_handler(
     State(state): State<Arc<AppState>>,
