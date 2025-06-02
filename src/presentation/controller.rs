@@ -18,9 +18,18 @@ pub async fn registration_handler(
     Json(registration_request): Json<RegistrationRequest>,
 ) -> Result<Json<String>, StatusCode> {
     let username = registration_request.username;
-    let password = registration_request.password;
     let email = registration_request.email;
-    
+
+    let username_check = state.user_repository.find_by_name(&username);
+    let email_check = state.user_repository.find_by_email(&email);
+
+    let (username_result, email_result) = tokio::join!(username_check, email_check);
+
+    if username_result.is_ok() || email_result.is_ok() {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    let password = registration_request.password;
     let password_hasher = state.password_hasher.clone();
 
     
@@ -28,8 +37,9 @@ pub async fn registration_handler(
         password_hasher.hash_password(&password)
     })
     .await{
-        Ok(hash) => hash,
-        Err(_) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
+        Ok(Ok(hash)) => hash,
+        Ok(Err(_)) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
     match state.user_repository.create(username, email, password_hash).await {

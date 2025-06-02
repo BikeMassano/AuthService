@@ -1,27 +1,37 @@
-use argon2::{
-    password_hash::{
-        PasswordHash, PasswordHasher as PH, PasswordVerifier, SaltString, rand_core::OsRng
-    },
-    Argon2
-};
-
+use argon2::{password_hash::{
+    PasswordHash, PasswordHasher as PH, PasswordVerifier, SaltString, rand_core::OsRng
+}, Argon2, Params};
+use argon2::password_hash::Error;
 use crate::application::password_hasher::PasswordHasher;
 
-pub struct Argon2PasswordHasher;
+pub struct Argon2PasswordHasher {
+    argon2: Argon2<'static>,
+}
 
-impl PasswordHasher for Argon2PasswordHasher {
-    fn hash_password(&self, password: &str) -> String {
+impl Argon2PasswordHasher {
+    pub fn new() -> Self {
         let argon2 = Argon2::new(
             argon2::Algorithm::Argon2id,
             argon2::Version::V0x13,
-            argon2::Params::new(65536, 3, 2, None).unwrap(),
+            Params::new(32768, 2, 1, None).unwrap(),
         );
+
+        Self { argon2 }
+    }
+}
+
+impl PasswordHasher for Argon2PasswordHasher {
+    fn hash_password(&self, password: &str) -> Result<String, Error> {
+
 
         let salt = SaltString::generate(&mut OsRng);
 
-        let password_hash = argon2.hash_password(password.as_bytes(), &salt).unwrap();
+        let password_hash = match self.argon2.hash_password(password.as_bytes(), &salt) {
+            Ok(hash) => hash.to_string(),
+            Err(e) => return Err(e),
+        };
 
-        password_hash.to_string()
+        Ok(password_hash)
     }
 
 
@@ -32,8 +42,7 @@ impl PasswordHasher for Argon2PasswordHasher {
         }
         
         let parsed_hash = parsed_hash.unwrap();
-        
-        let argon2 = Argon2::default();
-        argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok()
+
+        self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok()
     }
 }

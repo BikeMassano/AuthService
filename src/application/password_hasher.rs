@@ -1,3 +1,5 @@
+use argon2::password_hash::Error;
+
 /// Интерфейс для хеширования и проверки пароля.
 ///
 /// Этот трейт предоставляет методы для безопасного хеширования паролей и их последующей проверки.
@@ -9,7 +11,7 @@ pub trait PasswordHasher: Send + Sync {
     ///
     /// # Возвращаемое значение
     /// `String`, содержащий хэш пароля.
-    fn hash_password(&self, password: &str) -> String;
+    fn hash_password(&self, password: &str) -> Result<String, Error>;
     /// Проверяет, соответствует ли переданный пароль хэшу.
     ///
     /// # Параметры

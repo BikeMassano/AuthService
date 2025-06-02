@@ -39,7 +39,7 @@ async fn main() {
 
     // Инстанцируем сервисы
     let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(private_key, public_key));
-    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher);
+    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
     let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(db_connection));
 
     // Внедряем сервисы в контейнер зависимостей
