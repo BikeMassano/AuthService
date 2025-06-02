@@ -59,7 +59,7 @@ impl UserRepository for PostgresUserRepository {
             username: Set(username),
             password_hash: Set(password_hash),
             email: Set(email),
-            role_id: Set(Role::USER),
+            role: Set(Role::USER),
         };
 
         return match user.insert(&self.db).await {

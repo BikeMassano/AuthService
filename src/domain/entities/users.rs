@@ -10,11 +10,11 @@ pub struct Model {
     pub user_id: Uuid,
     #[sea_orm(unique)]
     pub username: String,
-    #[serde(skip_deserializing)]
+    #[serde(skip_deserializing, skip_serializing)]
     pub password_hash: String,
     #[sea_orm(unique)]
     pub email: String,
-    pub role_id: Role,
+    pub role: Role,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

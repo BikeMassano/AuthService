@@ -21,6 +21,7 @@ pub async fn registration_handler(
     let username = registration_request.username;
     let password = registration_request.password;
     let email = registration_request.email;
+    
     let password_hasher = state.password_hasher.clone();
 
     
@@ -74,12 +75,13 @@ pub async fn login_handler(
 
     let username = &user.username;
     let password = &login_request.password;
+    let user_role = &user.role;
 
     let is_valid = is_valid_user(&user, password, &state.password_hasher);
 
     if is_valid.await {
 
-        let token = match state.jwt_provider.generate_token(username, &Role::GUEST) {
+        let token = match state.jwt_provider.generate_token(username, user_role) {
             Ok(token) => token,
             Err(e) => {
                 eprintln!("Failed to encode token: {}", e);

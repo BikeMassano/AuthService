@@ -24,8 +24,7 @@ impl JwtProvider for HmacJwtProvider {
             role: role.to_value(),
             exp: (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp(),
         };
-
-        // вынести секретный ключ!
+        
         let token = encode(
             &Header::default(),
             &claims, 
