@@ -62,7 +62,7 @@ impl UserRepository for PostgresUserRepository {
             role: Set(Role::USER),
         };
 
-        return match user.insert(&self.db).await {
+        match user.insert(&self.db).await {
             Ok(_) => Ok(()),
             Err(err) => {
                 eprintln!("Insert failed {err}");

@@ -6,7 +6,6 @@ use sea_orm::DbErr;
 
 use crate::{
     application::{password_hasher::PasswordHasher},
-    domain::{enums::roles::Role},
     presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
 };
 

@@ -1,7 +1,5 @@
-use std::env;
 use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError, DecodingKey, Validation};
 use sea_orm::ActiveEnum;
-use dotenv::dotenv;
 
 
 use crate::{
