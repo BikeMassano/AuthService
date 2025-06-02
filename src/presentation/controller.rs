@@ -8,7 +8,7 @@ use crate::{
     application::{password_hasher::PasswordHasher},
     presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
 };
-
+use crate::domain::claims::Claims;
 use crate::domain::entities::users::Model;
 use crate::infrastructure::app_state::AppState;
 use crate::presentation::requests::registration_request::RegistrationRequest;
@@ -114,19 +114,16 @@ async fn is_valid_user(
 pub async fn get_info_handler(
     State(state): State<Arc<AppState>>,
     header_map: HeaderMap
-) -> Result<Json<String>, StatusCode> {
+) -> Result<Json<Claims>, StatusCode> {
     if let Some(auth_header) = header_map.get("Authorization") {
         if let Ok(auth_header_str) = auth_header.to_str() {
             if auth_header_str.starts_with("Bearer ") {
                 let token = auth_header_str.trim_start_matches("Bearer ").to_string();
 
                 return match state.jwt_provider.decode_token(&token) {
-                    Ok(_) => {
-                        let info = "You are logged in".to_string();
-                        Ok(Json(info))
-                    }
+                    Ok(claims) => Ok(Json(claims)),
                     Err(e) => {
-                        eprintln!("Failed to encode token: {}", e);
+                        eprintln!("Failed to decode token: {}", e);
                         Err(StatusCode::UNAUTHORIZED)
                     }
                 }
