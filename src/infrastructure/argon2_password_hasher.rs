@@ -13,7 +13,7 @@ impl Argon2PasswordHasher {
         let argon2 = Argon2::new(
             argon2::Algorithm::Argon2id,
             argon2::Version::V0x13,
-            Params::new(32768, 2, 1, None).unwrap(),
+            Params::new(7168, 2, 1, None).unwrap(),
         );
 
         Self { argon2 }

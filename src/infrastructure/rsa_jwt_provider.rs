@@ -9,16 +9,22 @@ use crate::{
 use crate::domain::enums::token_type::TokenType;
 
 pub struct RsaJwtProvider {
-    private_secret_key: String,
-    public_secret_key: String,
+    decoding_key: DecodingKey,
+    encoding_key: EncodingKey,
     issuer: String,
     access_token_exp: i64,
     refresh_token_exp: i64
 }
 
 impl RsaJwtProvider {
-    pub fn new(private_secret_key: String, public_secret_key: String, issuer: String, access_token_exp: i64, refresh_token_exp: i64) -> Self {
-        Self { private_secret_key, public_secret_key, issuer, access_token_exp, refresh_token_exp }
+    pub fn new(private_key_pem: &str, public_key_pem: &str, issuer: String, access_token_exp: i64, refresh_token_exp: i64) -> Result<Self, jsonwebtoken::errors::Error> {
+        Ok(Self { 
+            decoding_key: DecodingKey::from_rsa_pem(public_key_pem.as_bytes())?,
+            encoding_key: EncodingKey::from_rsa_pem(private_key_pem.as_bytes())?,
+            issuer,
+            access_token_exp,
+            refresh_token_exp
+        })
     }
 }
 
@@ -34,14 +40,11 @@ impl JwtProvider for RsaJwtProvider {
             iat: chrono::Utc::now().timestamp(),
             jti: None,
         };
-
-        let encoding_key = EncodingKey::from_rsa_pem(self.private_secret_key.as_bytes())
-            .map_err(JwtError::from)?;
         
         let token = encode(
             &Header::new(Algorithm::RS256),
             &claims, 
-            &encoding_key,)?;
+            &self.encoding_key,)?;
         
         Ok(token)
     }
@@ -55,8 +58,7 @@ impl JwtProvider for RsaJwtProvider {
 
         let token_data = jsonwebtoken::decode::<Claims>(
             token,
-            &DecodingKey::from_rsa_pem(self.public_secret_key.as_bytes())
-                .map_err(JwtError::from)?,
+            &self.decoding_key,
             &validation,
         )?;
 
@@ -79,13 +81,10 @@ impl JwtProvider for RsaJwtProvider {
             jti: Some(Uuid::new_v4().to_string())
         };
 
-        let encoding_key = EncodingKey::from_rsa_pem(self.private_secret_key.as_bytes())
-            .map_err(JwtError::from)?;
-
         let token = encode(
             &Header::new(Algorithm::RS256),
             &claims,
-            &encoding_key,
+            &self.encoding_key,
         )?;
 
         Ok(token)
@@ -100,8 +99,7 @@ impl JwtProvider for RsaJwtProvider {
 
         let token_data = jsonwebtoken::decode::<Claims>(
             token,
-            &DecodingKey::from_rsa_pem(self.public_secret_key.as_bytes())
-                .map_err(JwtError::from)?,
+            &self.decoding_key,
             &validation,
         )?;
 

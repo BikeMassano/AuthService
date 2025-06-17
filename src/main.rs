@@ -53,7 +53,7 @@ async fn main() {
     
     // Получаем строку подключения к базе данных учётных записей
     let user_db_url = env::var("USER_DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+        .expect("USER_DATABASE_URL must be set");
     
     // Устанавливаем соединение с базой данных учётных записей
     let user_db_connection = Database::connect(&user_db_url).await
@@ -61,29 +61,29 @@ async fn main() {
 
     // Получаем строку подключения к базе данных refresh токенов
     let token_db_url = env::var("TOKEN_DATABASE_URL")
-        .expect("REDIS_URI must be set");
+        .expect("TOKEN_DATABASE_URL must be set");
 
-    // Настраиваем пул соединений Redis
-    let redis_manager = RedisConnectionManager::new(token_db_url)
-        .expect("Failed to create Redis connection manager");
-
-    let redis_pool = Pool::builder()
-        .build(redis_manager)
-        .await
-        .expect("Failed to create Redis connection pool");
+    // // Настраиваем пул соединений Redis
+    // let redis_manager = RedisConnectionManager::new(token_db_url)
+    //     .expect("Failed to create Redis connection manager");
+    //
+    // let redis_pool = Pool::builder()
+    //     .build(redis_manager)
+    //     .await
+    //     .expect("Failed to create Redis connection pool");
 
     // Инстанцируем сервисы
-    let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(private_key, public_key, issuer, access_token_exp, refresh_token_exp));
+    let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(&private_key, &public_key, issuer, access_token_exp, refresh_token_exp)
+        .expect("Failed to create jwt provider"));
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
     let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(user_db_connection));
-    let token_repository: Arc<dyn TokenRepository> = Arc::new(RedisTokenRepository::new(redis_pool));
-
+    //let token_repository: Arc<dyn TokenRepository> = Arc::new(RedisTokenRepository::new(redis_pool));
     // Внедряем сервисы в контейнер зависимостей
     let app_state = Arc::new(AppState {
         jwt_provider,
         password_hasher,
         user_repository,
-        token_repository
+        //token_repository
     });
 
     let app = Router::new()
