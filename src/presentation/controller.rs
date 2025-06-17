@@ -51,6 +51,7 @@ pub async fn registration_handler(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+    // Реализовать аутентификацию после регистрации
 }
 
 pub async fn login_handler(
@@ -58,25 +59,20 @@ pub async fn login_handler(
     Json(login_request) : Json<LoginRequest>
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // Поиск пользователя по имени
-    let user_repository = &state.user_repository;
-
-    let user = match user_repository.find_by_name(&login_request.username).await {
+    let user = match state.user_repository.find_by_name(&login_request.username).await {
         Ok(user) => user,
         // Если не найден по имени, ищем по email
-        Err(DbErr::RecordNotFound(_)) => match user_repository.find_by_email(&login_request.username).await {
+        Err(DbErr::RecordNotFound(_)) => match state.user_repository.find_by_email(&login_request.username).await {
             Ok(user) => user,
             // Не найден ни по имени, ни по email
             Err(DbErr::RecordNotFound(_)) => {
-                eprintln!("User {} not found", &login_request.username);
-                return Err(StatusCode::NOT_FOUND);
+                return Err(StatusCode::UNAUTHORIZED);
             },
-            Err(err) => {
-                eprintln!("Failed to find user {}: {}", &login_request.username, err);
+            Err(_) => {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             },
         },
-        Err(err) => {
-            eprintln!("Failed to find user {}: {}", &login_request.username, err);
+        Err(_) => {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -85,24 +81,71 @@ pub async fn login_handler(
     let username = &user.username;
     let password = &login_request.password;
     let user_role = &user.role;
+    let user_id = &user.user_id;
 
     let is_valid = is_valid_user(&user, password, &state.password_hasher);
 
     if is_valid.await {
 
-        let token = match state.jwt_provider.generate_token(username, user_role) {
+        let access_token = match state.jwt_provider.generate_access_token(username, user_id ,user_role) {
             Ok(token) => token,
-            Err(e) => {
-                eprintln!("Failed to encode token: {}", e);
+            Err(_) => {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         };
 
-        Ok(Json(LoginResponse { token }))
+        let refresh_token = match state.jwt_provider.generate_refresh_token(&user.username, &user.user_id, &user.role) {
+            Ok(token) => token,
+            Err(_) => {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
+
+        // реализовать сохранение refresh-токена в базу Redis
+        
+        Ok(Json(LoginResponse { 
+            access_token,
+            refresh_token
+        }))
     }
     else {
         Err(StatusCode::UNAUTHORIZED)
     }
+}
+
+pub async fn logout_handler() -> Result<Json<String>, StatusCode> {
+    todo!()
+}
+
+pub async fn refresh_handler() -> Result<Json<String>, StatusCode> {
+    todo!()
+}
+
+pub async fn delete_handler() -> Result<Json<String>, StatusCode> {
+    todo!()
+}
+
+pub async fn get_info_handler(
+    State(state): State<Arc<AppState>>,
+    header_map: HeaderMap
+) -> Result<Json<Claims>, StatusCode> {
+    if let Some(auth_header) = header_map.get("Authorization") {
+        if let Ok(auth_header_str) = auth_header.to_str() {
+            if auth_header_str.starts_with("Bearer ") {
+                let token = auth_header_str.trim_start_matches("Bearer ").to_string();
+
+                return match state.jwt_provider.verify_access_token(&token) {
+                    Ok(claims) => Ok(Json(claims)),
+                    Err(e) => {
+                        eprintln!("Failed to decode token: {}", e);
+                        Err(StatusCode::UNAUTHORIZED)
+                    }
+                }
+            }
+        }
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 async fn is_valid_user(
@@ -120,26 +163,4 @@ async fn is_valid_user(
     })
     .await
     .unwrap_or(false)
-}
-pub async fn get_info_handler(
-    State(state): State<Arc<AppState>>,
-    header_map: HeaderMap
-) -> Result<Json<Claims>, StatusCode> {
-    if let Some(auth_header) = header_map.get("Authorization") {
-        if let Ok(auth_header_str) = auth_header.to_str() {
-            if auth_header_str.starts_with("Bearer ") {
-                let token = auth_header_str.trim_start_matches("Bearer ").to_string();
-
-                return match state.jwt_provider.decode_token(&token) {
-                    Ok(claims) => Ok(Json(claims)),
-                    Err(e) => {
-                        eprintln!("Failed to decode token: {}", e);
-                        Err(StatusCode::UNAUTHORIZED)
-                    }
-                }
-            }
-        }
-    }
-
-    Err(StatusCode::UNAUTHORIZED)
 }

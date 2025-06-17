@@ -28,6 +28,19 @@ async fn main() {
         .expect("JWT_PRIVATE_KEY must be set");
     let public_key = env::var("JWT_PUBLIC_KEY")
         .expect("JWT_PUBLIC_KEY must be set");
+    // Получаем время истечения access токена в минутах
+    let access_token_exp = env::var("JWT_ACCESS_EXP")
+        .expect("JWT_ACCESS_EXP must be set")
+        .parse::<i64>()
+        .expect("JWT_ACCESS_EXP must be a number");
+    // Получаем время истечения refresh токена в днях
+    let refresh_token_exp = env::var("JWT_REFRESH_EXP")
+        .expect("JWT_REFRESH_EXP must be set")
+        .parse::<i64>()
+        .expect("JWT_REFRESH_EXP must be a number");
+    // Получаем издателя токена
+    let issuer = env::var("ISSUER")
+        .expect("ISSUER must be set");
     
     // Получаем строку подключения к базе данных
     let db_url = env::var("DATABASE_URL")
@@ -38,7 +51,7 @@ async fn main() {
         .expect("Failed to connect to database");
 
     // Инстанцируем сервисы
-    let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(private_key, public_key));
+    let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(private_key, public_key, issuer, access_token_exp, refresh_token_exp));
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
     let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(db_connection));
 
