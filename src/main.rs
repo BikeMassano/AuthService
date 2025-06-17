@@ -1,17 +1,26 @@
-use std::env;
-use std::sync::Arc;
-use axum::Router;
-use axum::routing::{get, post};
+use std::{env, sync::Arc};
+use axum::{Router, routing::{get, post}};
 use dotenv::dotenv;
 use sea_orm::Database;
-use infrastructure::app_state::AppState;
-use crate::application::jwt_provider::JwtProvider;
-use crate::application::password_hasher::PasswordHasher;
-use crate::application::repositories::user_repository::UserRepository;
-use crate::infrastructure::argon2_password_hasher::Argon2PasswordHasher;
-use crate::infrastructure::data::pg_user_repository::PostgresUserRepository;
-use crate::infrastructure::rsa_jwt_provider::{RsaJwtProvider};
-use crate::presentation::controller::{get_info_handler, login_handler, registration_handler};
+use bb8::Pool;
+use bb8_redis::RedisConnectionManager;
+
+use crate::{
+    application::{
+        jwt_provider::JwtProvider,
+        password_hasher::PasswordHasher,
+        repositories::user_repository::UserRepository,
+    },
+    infrastructure::{
+        app_state::AppState,
+        argon2_password_hasher::Argon2PasswordHasher,
+        data::pg_user_repository::PostgresUserRepository,
+        rsa_jwt_provider::RsaJwtProvider,
+    },
+    presentation::controller::{get_info_handler, login_handler, registration_handler},
+};
+use crate::application::repositories::token_repository::TokenRepository;
+use crate::infrastructure::data::redis_token_repository::RedisTokenRepository;
 
 mod presentation;
 mod domain;
@@ -42,24 +51,39 @@ async fn main() {
     let issuer = env::var("ISSUER")
         .expect("ISSUER must be set");
     
-    // Получаем строку подключения к базе данных
-    let db_url = env::var("DATABASE_URL")
+    // Получаем строку подключения к базе данных учётных записей
+    let user_db_url = env::var("USER_DATABASE_URL")
         .expect("DATABASE_URL must be set");
     
-    // Устанавливаем соединение с базой данных
-    let db_connection = Database::connect(&db_url).await
+    // Устанавливаем соединение с базой данных учётных записей
+    let user_db_connection = Database::connect(&user_db_url).await
         .expect("Failed to connect to database");
+
+    // Получаем строку подключения к базе данных refresh токенов
+    let token_db_url = env::var("TOKEN_DATABASE_URL")
+        .expect("REDIS_URI must be set");
+
+    // Настраиваем пул соединений Redis
+    let redis_manager = RedisConnectionManager::new(token_db_url)
+        .expect("Failed to create Redis connection manager");
+
+    let redis_pool = Pool::builder()
+        .build(redis_manager)
+        .await
+        .expect("Failed to create Redis connection pool");
 
     // Инстанцируем сервисы
     let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(private_key, public_key, issuer, access_token_exp, refresh_token_exp));
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
-    let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(db_connection));
+    let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(user_db_connection));
+    let token_repository: Arc<dyn TokenRepository> = Arc::new(RedisTokenRepository::new(redis_pool));
 
     // Внедряем сервисы в контейнер зависимостей
     let app_state = Arc::new(AppState {
         jwt_provider,
         password_hasher,
         user_repository,
+        token_repository
     });
 
     let app = Router::new()

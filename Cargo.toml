@@ -9,10 +9,12 @@ axum = "0.8.4"
 jsonwebtoken = "9.3.1"
 serde = "1.0.219"
 chrono = "0.4.41"
-bcrypt = "0.17.0"
 sea-orm = { version =  "1.1.12", features = ["sqlx-postgres", "runtime-tokio-native-tls"] }
 sqlx = "0.8.6"
 argon2 = { version = "0.5.3", features = ["std"] }
 dotenv = "0.15.0"
 uuid = { version = "1.17.0", features = ["v4"] }
+redis = "0.32.0"
+bb8 = "0.9.0"
+bb8-redis = "0.24.0"
 
