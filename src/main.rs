@@ -1,9 +1,8 @@
 use std::{env, sync::Arc};
 use axum::{Router, routing::{get, post}};
+use axum::routing::patch;
 use dotenv::dotenv;
 use sea_orm::Database;
-use bb8::Pool;
-use bb8_redis::RedisConnectionManager;
 
 use crate::{
     application::{
@@ -17,10 +16,11 @@ use crate::{
         data::pg_user_repository::PostgresUserRepository,
         rsa_jwt_provider::RsaJwtProvider,
     },
-    presentation::controller::{get_info_handler, login_handler, registration_handler},
+    presentation::controller::{login_handler, registration_handler},
 };
 use crate::application::repositories::token_repository::TokenRepository;
 use crate::infrastructure::data::redis_token_repository::RedisTokenRepository;
+use crate::presentation::controller::{get_current_user_handler, get_user_handler, get_users_handler, update_current_user_handler};
 
 mod presentation;
 mod domain;
@@ -63,33 +63,31 @@ async fn main() {
     let token_db_url = env::var("TOKEN_DATABASE_URL")
         .expect("TOKEN_DATABASE_URL must be set");
 
-    // // Настраиваем пул соединений Redis
-    // let redis_manager = RedisConnectionManager::new(token_db_url)
-    //     .expect("Failed to create Redis connection manager");
-    //
-    // let redis_pool = Pool::builder()
-    //     .build(redis_manager)
-    //     .await
-    //     .expect("Failed to create Redis connection pool");
-
     // Инстанцируем сервисы
     let jwt_provider: Arc<dyn JwtProvider> = Arc::new(RsaJwtProvider::new(&private_key, &public_key, issuer, access_token_exp, refresh_token_exp)
         .expect("Failed to create jwt provider"));
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
     let user_repository: Arc<dyn UserRepository> = Arc::new(PostgresUserRepository::new(user_db_connection));
-    //let token_repository: Arc<dyn TokenRepository> = Arc::new(RedisTokenRepository::new(redis_pool));
+    let token_repository: Arc<dyn TokenRepository> = Arc::new(
+        RedisTokenRepository::new(&token_db_url)
+            .expect("Failed to create Redis token repository")
+    );
+
     // Внедряем сервисы в контейнер зависимостей
     let app_state = Arc::new(AppState {
         jwt_provider,
         password_hasher,
         user_repository,
-        //token_repository
+        token_repository
     });
 
     let app = Router::new()
         .route("/login", post(login_handler))
         .route("/registration", post(registration_handler))
-        .route("/info", get(get_info_handler))
+        .route("/me", get(get_current_user_handler))
+        .route("/admin/users", get(get_users_handler))
+        .route("/admin/users/{username}", get(get_user_handler))
+        .route("/me", patch(update_current_user_handler))
 
         .with_state(app_state);
 

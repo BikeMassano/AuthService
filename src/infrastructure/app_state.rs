@@ -9,5 +9,5 @@ pub struct AppState {
     pub jwt_provider: Arc<dyn JwtProvider>,
     pub password_hasher: Arc<dyn PasswordHasher>,
     pub user_repository: Arc<dyn UserRepository>,
-    //pub token_repository: Arc<dyn TokenRepository>
+    pub token_repository: Arc<dyn TokenRepository>
 }

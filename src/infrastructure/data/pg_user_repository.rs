@@ -71,11 +71,36 @@ impl UserRepository for PostgresUserRepository {
         }
     }
 
-    async fn delete_by_id(&self, id: i32) -> Result<(), DbErr> {
+    async fn delete_by_id(&self, id: Uuid) -> Result<(), DbErr> {
         todo!()
     }
 
-    async fn update_by_id(&self, id: i32, user: UserModel) -> Result<(), DbErr> {
-        todo!()
+    async fn update_by_id(&self, id: Uuid, user: UserModel) -> Result<(), DbErr> {
+        // Ищем пользователя
+        let existing_user = UserEntity::find_by_id(id)
+            .one(&self.db)
+            .await?
+            .ok_or(DbErr::RecordNotFound(format!("User {} not found", id)))?;
+
+        // Преобразовываем в отслеживаемую модель
+        let mut active_user: UserActiveModel = existing_user.into();
+
+        // Изменяем поля изменяемой модели
+        if active_user.username.as_ref() != &user.username {
+            active_user.username = Set(user.username);
+        }
+        if active_user.email.as_ref() != &user.email {
+            active_user.email = Set(user.email);
+        }
+        if active_user.password_hash.as_ref() != &user.password_hash {
+            active_user.password_hash = Set(user.password_hash);
+        }
+        if active_user.role.as_ref() != &user.role {
+            active_user.role = Set(user.role);
+        }
+
+        active_user.update(&self.db).await?;
+        
+        Ok(())
     }
 }
