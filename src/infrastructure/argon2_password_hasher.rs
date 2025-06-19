@@ -22,14 +22,9 @@ impl Argon2PasswordHasher {
 
 impl PasswordHasher for Argon2PasswordHasher {
     fn hash_password(&self, password: &str) -> Result<String, Error> {
-
-
         let salt = SaltString::generate(&mut OsRng);
 
-        let password_hash = match self.argon2.hash_password(password.as_bytes(), &salt) {
-            Ok(hash) => hash.to_string(),
-            Err(e) => return Err(e),
-        };
+        let password_hash = self.argon2.hash_password(password.as_bytes(), &salt)?.to_string();
 
         Ok(password_hash)
     }

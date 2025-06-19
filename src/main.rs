@@ -31,7 +31,7 @@ mod infrastructure;
 async fn main() {
     // Загружаем переменные окружения
     dotenv().ok();
-    
+
     // Получаем секретные ключи для JWT
     let private_key = env::var("JWT_PRIVATE_KEY")
         .expect("JWT_PRIVATE_KEY must be set");
@@ -50,11 +50,11 @@ async fn main() {
     // Получаем издателя токена
     let issuer = env::var("ISSUER")
         .expect("ISSUER must be set");
-    
+
     // Получаем строку подключения к базе данных учётных записей
     let user_db_url = env::var("USER_DATABASE_URL")
         .expect("USER_DATABASE_URL must be set");
-    
+
     // Устанавливаем соединение с базой данных учётных записей
     let user_db_connection = Database::connect(&user_db_url).await
         .expect("Failed to connect to database");
@@ -92,9 +92,9 @@ async fn main() {
         .with_state(app_state);
 
     let listener =
-    tokio::net::TcpListener::bind(("127.0.0.1", 8080))
-        .await
-        .unwrap();
+        tokio::net::TcpListener::bind(("127.0.0.1", 8080))
+            .await
+            .unwrap();
 
     println!("Listening on {}", listener.local_addr().unwrap());
 

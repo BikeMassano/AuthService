@@ -11,8 +11,9 @@ use crate::{
     presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
 };
 use crate::application::jwt_provider::JwtProvider;
+use crate::application::repositories::token_repository::TokenRepository;
 use crate::domain::claims::Claims;
-use crate::domain::entities::users::{Model as UserModel, ActiveModel as UserActiveModel};
+use crate::domain::entities::users::Model as UserModel;
 use crate::infrastructure::app_state::AppState;
 use crate::presentation::requests::registration_request::RegistrationRequest;
 use crate::presentation::requests::update_request::UpdateRequest;
@@ -69,55 +70,23 @@ pub async fn login_handler(
     State(state): State<Arc<AppState>>,
     Json(login_request) : Json<LoginRequest>
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // Поиск пользователя по имени
-    let user = match state.user_repository.find_by_name(&login_request.username).await {
+    // Поиск пользователя по имени или почте
+    let user = match state.user_repository.find_by_email_or_username(&login_request.username).await {
         Ok(user) => user,
-        // Если не найден по имени, ищем по email
-        Err(DbErr::RecordNotFound(_)) => match state.user_repository.find_by_email(&login_request.username).await {
-            Ok(user) => user,
-            // Не найден ни по имени, ни по email
-            Err(DbErr::RecordNotFound(_)) => {
-                return Err(StatusCode::UNAUTHORIZED);
-            },
-            Err(_) => {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            },
-        },
-        Err(_) => {
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+        Err(DbErr::RecordNotFound(_)) => return Err(StatusCode::UNAUTHORIZED),
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
 
-    let username = &user.username;
     let password = &login_request.password;
-    let user_role = &user.role;
-    let user_id = &user.user_id;
 
     let is_valid = is_valid_user(&user, password, &state.password_hasher);
 
     if is_valid.await {
+        // вывести в отдельный метод генерацию пары токенов
+        let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user).await?;
 
-        let access_token = match state.jwt_provider.generate_access_token(username, user_id ,user_role) {
-            Ok(token) => token,
-            Err(_) => {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        };
-
-        let refresh_token = match state.jwt_provider.generate_refresh_token(&user.username, &user.user_id, &user.role) {
-            Ok(token) => token,
-            Err(_) => {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
-
-        // реализовать сохранение refresh-токена в базу Redis
-        
-        Ok(Json(LoginResponse { 
-            access_token,
-            refresh_token
-        }))
+        Ok(Json(tokens))
     }
     else {
         Err(StatusCode::UNAUTHORIZED)
@@ -206,29 +175,15 @@ pub async fn update_current_user_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
     // 6. Инвалидируем старые токены
-    state.token_repository.delete_all_refresh_tokens(&updated_user.user_id).await?;
+    state.token_repository.delete_all_refresh_tokens(&updated_user.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
     // 7. Генерируем новые токены
-    let access_token = match state.jwt_provider.generate_access_token(&updated_user.username, &updated_user.user_id ,&updated_user.role) {
-        Ok(token) => token,
-        Err(_) => {
-            return Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    };
-
-    let refresh_token = match state.jwt_provider.generate_refresh_token(&updated_user.username, &updated_user.user_id ,&updated_user.role) {
-        Ok(token) => token,
-        Err(_) => {
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-    state.token_repository.save_refresh_token(&updated_user.user_id, &refresh_token, Duration::days(15)).await?;
+    let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &updated_user).await?;
 
     // 8. Конвертируем в UserResponse и возвращаем
-    Ok(Json(LoginResponse {
-        access_token,
-        refresh_token,
-    }))
+    Ok(Json(tokens))
 }
 
 pub async fn get_users_handler(
@@ -288,6 +243,32 @@ fn extract_and_validate_token(
         .map_err(|_| StatusCode::UNAUTHORIZED)
 }
 
+async fn generate_tokens(
+    jwt_provider: &Arc<dyn JwtProvider>,
+    token_repository: &Arc<dyn TokenRepository>,
+    user: &UserModel,
+) -> Result<LoginResponse, StatusCode> {
+    // Генерация access токена
+    let access_token = jwt_provider
+        .generate_access_token(&user.username, &user.user_id, &user.role)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Генерация refresh токена
+    let refresh_token = jwt_provider
+        .generate_refresh_token(&user.username, &user.user_id, &user.role)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Сохранение refresh токена
+    token_repository
+        .save_refresh_token(&user.user_id, &refresh_token, Duration::days(15))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(LoginResponse {
+        access_token,
+        refresh_token,
+    })
+}
 
 async fn is_valid_user(
     user: &UserModel,

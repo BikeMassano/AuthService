@@ -14,6 +14,7 @@ sqlx = "0.8.6"
 argon2 = { version = "0.5.3", features = ["std"] }
 dotenv = "0.15.0"
 uuid = { version = "1.17.0", features = ["v4"] }
-redis = { version = "0.32.0", features = ["aio"] }
+redis = { version = "0.32.0", features = ["tokio-comp"] }
 deadpool-redis = "0.21.1"
+
 

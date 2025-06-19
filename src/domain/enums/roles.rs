@@ -7,7 +7,5 @@ pub enum Role {
     #[sea_orm(string_value = "Admin")]
     ADMIN,
     #[sea_orm(string_value = "User")]
-    USER,
-    #[sea_orm(string_value = "Guest")]
-    GUEST
+    USER
 }

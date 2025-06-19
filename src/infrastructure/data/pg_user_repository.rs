@@ -1,10 +1,9 @@
 use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, QueryFilter, QueryOrder, QuerySelect, Set};
 use sea_orm::prelude::async_trait::async_trait;
+use uuid::Uuid;
+
 use crate::application::repositories::user_repository::UserRepository;
 use crate::domain::entities::users::{Model as UserModel, Entity as UserEntity, Column as UserColumn, ActiveModel as UserActiveModel};
-use sea_orm::EntityTrait;
-use uuid::Uuid;
-use sea_orm::ColumnTrait;
 use crate::domain::enums::roles::Role;
 
 pub struct PostgresUserRepository {
@@ -72,7 +71,10 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn delete_by_id(&self, id: Uuid) -> Result<(), DbErr> {
-        todo!()
+        UserEntity::delete_by_id(id)
+            .exec(&self.db)
+            .await?;
+        Ok(())
     }
 
     async fn update_by_id(&self, id: Uuid, user: UserModel) -> Result<(), DbErr> {
