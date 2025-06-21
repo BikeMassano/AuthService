@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use argon2::password_hash::Error;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use chrono::Duration;
-use sea_orm::{DbErr, Set};
+use sea_orm::{DbErr};
 use serde::Deserialize;
 
 use crate::{
@@ -32,7 +33,7 @@ pub async fn registration_handler(
     let username = registration_request.username;
     let email = registration_request.email;
     let profile_pic_url = registration_request.profile_pic_url;
-    
+
     let username_check = state.user_repository.find_by_name(&username);
     let email_check = state.user_repository.find_by_email(&email);
 
@@ -81,11 +82,17 @@ pub async fn login_handler(
 
     let password = &login_request.password;
 
-    let is_valid = is_valid_user(&user, password, &state.password_hasher);
+    let is_valid = match is_valid_user(&user, password, &state.password_hasher)
+        .await {
+        Ok(is_valid) => is_valid,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
-    if is_valid.await {
+    if is_valid {
         // вывести в отдельный метод генерацию пары токенов
-        let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user).await?;
+        let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;;
 
         Ok(Json(tokens))
     }
@@ -259,8 +266,8 @@ async fn generate_tokens(
     let refresh_token = jwt_provider
         .generate_refresh_token(&user.username, &user.user_id, &user.role)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    
+
+
     let refresh_token_id = match jwt_provider.verify_refresh_token(&refresh_token){
         Ok(refresh_token_id) => refresh_token_id.jti,
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR)
@@ -283,7 +290,7 @@ async fn is_valid_user(
     user: &UserModel,
     password: &str,
     password_hasher: &Arc<dyn PasswordHasher>,
-) -> bool {
+) -> Result<bool, Error> {
     // получаем захэшированный пароль
     let password_hash = user.password_hash.clone();
     let password = password.to_owned();
@@ -293,5 +300,5 @@ async fn is_valid_user(
         password_hasher.verify_password(&password, password_hash.as_ref())
     })
     .await
-    .unwrap_or(false)
+    .map_err(|_| Error::Crypto)?
 }

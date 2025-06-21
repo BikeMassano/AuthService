@@ -62,6 +62,7 @@ impl JwtProvider for RsaJwtProvider {
             &validation,
         )?;
 
+        // проверка, что это access токен
         if token_data.claims.token_type != TokenType::Access {
             return Err(JwtError::from(ErrorKind::InvalidToken));
         }

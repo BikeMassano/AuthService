@@ -30,15 +30,18 @@ impl PasswordHasher for Argon2PasswordHasher {
     }
 
 
-    fn verify_password(&self, password: &str, password_hash: &str) -> bool {
+    fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, Error> {
         let parsed_hash = match PasswordHash::new(password_hash) {
             Ok(hash) => hash,
-            Err(_) => {
+            Err(e) => {
+                // фиктивная проверка пароля для защиты от атак по времени
                 let fake_hash = PasswordHash::new("$argon2id$v=19$m=7168,t=2,p=1$dummy").unwrap();
                 let _ = self.argon2.verify_password(password.as_bytes(), &fake_hash);
-                return false
+                
+                return Err(e)
             }
         };
-    self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok()
+        
+    Ok(self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
     }
 }
