@@ -1,6 +1,6 @@
 use jsonwebtoken::{encode, EncodingKey, Header, errors::Error as JwtError, DecodingKey, Validation, Algorithm};
 use jsonwebtoken::errors::ErrorKind;
-use sea_orm::{ActiveEnum, Iden};
+use sea_orm::{ActiveEnum};
 use uuid::Uuid;
 use crate::{
     application::jwt_provider::JwtProvider,
@@ -78,7 +78,7 @@ impl JwtProvider for RsaJwtProvider {
             token_type: TokenType::Refresh,
             iss: self.issuer.clone(),
             iat: chrono::Utc::now().timestamp(),
-            jti: Some(Uuid::new_v4().to_string())
+            jti: Some(Uuid::new_v4())
         };
 
         let token = encode(

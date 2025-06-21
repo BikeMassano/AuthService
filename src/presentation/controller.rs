@@ -31,7 +31,8 @@ pub async fn registration_handler(
 ) -> Result<Json<String>, StatusCode> {
     let username = registration_request.username;
     let email = registration_request.email;
-
+    let profile_pic_url = registration_request.profile_pic_url;
+    
     let username_check = state.user_repository.find_by_name(&username);
     let email_check = state.user_repository.find_by_email(&email);
 
@@ -54,7 +55,7 @@ pub async fn registration_handler(
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    match state.user_repository.create(username, email, password_hash).await {
+    match state.user_repository.create(username, email, password_hash, profile_pic_url.unwrap()).await {
         Ok(_) => {
             let info = "You are registered".to_string();
             Ok(Json(info))
@@ -70,8 +71,8 @@ pub async fn login_handler(
     State(state): State<Arc<AppState>>,
     Json(login_request) : Json<LoginRequest>
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // Поиск пользователя по имени или почте
-    let user = match state.user_repository.find_by_email_or_username(&login_request.username).await {
+    // Поиск пользователя по почте
+    let user = match state.user_repository.find_by_email(&login_request.username).await {
         Ok(user) => user,
         Err(DbErr::RecordNotFound(_)) => return Err(StatusCode::UNAUTHORIZED),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -157,7 +158,8 @@ pub async fn update_current_user_handler(
         username: update_request.username.unwrap_or(user.username),
         email: update_request.email.unwrap_or(user.email),
         password_hash: user.password_hash,
-        role: user.role
+        role: user.role,
+        profile_pic_url: user.profile_pic_url,
     };
 
     // 4. Обновляем пользователя в БД
@@ -257,16 +259,23 @@ async fn generate_tokens(
     let refresh_token = jwt_provider
         .generate_refresh_token(&user.username, &user.user_id, &user.role)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    
+    let refresh_token_id = match jwt_provider.verify_refresh_token(&refresh_token){
+        Ok(refresh_token_id) => refresh_token_id.jti,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR)
+    };
 
     // Сохранение refresh токена
     token_repository
-        .save_refresh_token(&user.user_id, &refresh_token, Duration::days(15))
+        .save_refresh_token(&user.user_id, &refresh_token_id, Duration::days(15))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // возврат access токена и id refresh токена
     Ok(LoginResponse {
         access_token,
-        refresh_token,
+        refresh_token_id,
     })
 }
 

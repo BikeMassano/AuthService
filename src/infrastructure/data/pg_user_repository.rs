@@ -1,4 +1,4 @@
-use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, QueryFilter, QueryOrder, QuerySelect, Set, ColumnTrait, EntityTrait, Condition};
 use sea_orm::prelude::async_trait::async_trait;
 use uuid::Uuid;
 
@@ -52,13 +52,14 @@ impl UserRepository for PostgresUserRepository {
         Ok(users)
     }
 
-    async fn create(&self, username: String, email: String, password_hash: String) -> Result<(), DbErr> {
+    async fn create(&self, username: String, email: String, password_hash: String, profile_pic_url: String) -> Result<(), DbErr> {
         let user = UserActiveModel {
             user_id: Set(Uuid::new_v4()),
             username: Set(username),
             password_hash: Set(password_hash),
             email: Set(email),
             role: Set(Role::USER),
+            profile_pic_url: Set(profile_pic_url),
         };
 
         match user.insert(&self.db).await {
@@ -104,5 +105,18 @@ impl UserRepository for PostgresUserRepository {
         active_user.update(&self.db).await?;
         
         Ok(())
+    }
+
+    async fn find_by_email_or_username(&self, email_or_username: &str) -> Result<UserModel, DbErr> {
+        let user = UserEntity::find()
+            .filter(
+                Condition::any()
+                    .add(UserColumn::Email.eq(email_or_username))
+                    .add(UserColumn::Username.eq(email_or_username))
+            )
+            .one(&self.db)
+            .await?;
+
+        user.ok_or(DbErr::RecordNotFound("User not found".to_string()))
     }
 }

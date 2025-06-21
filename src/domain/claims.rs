@@ -11,5 +11,5 @@ pub struct Claims {
     pub token_type: TokenType,
     pub iat: i64,
     pub iss: String,
-    pub jti: Option<String>
+    pub jti: Option<Uuid>
 }
