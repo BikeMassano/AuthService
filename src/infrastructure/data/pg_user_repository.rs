@@ -1,17 +1,24 @@
-use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, QueryFilter, QueryOrder, QuerySelect, Set, ColumnTrait, EntityTrait, Condition};
 use sea_orm::prelude::async_trait::async_trait;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
+};
 use uuid::Uuid;
 
 use crate::application::repositories::user_repository::UserRepository;
-use crate::domain::entities::users::{Model as UserModel, Entity as UserEntity, Column as UserColumn, ActiveModel as UserActiveModel};
+use crate::domain::entities::users::{
+    ActiveModel as UserActiveModel, Column as UserColumn, Entity as UserEntity, Model as UserModel,
+};
 use crate::domain::enums::roles::Role;
 
 pub struct PostgresUserRepository {
-    db: DatabaseConnection
+    db: DatabaseConnection,
 }
 
 impl PostgresUserRepository {
-    pub fn new(db: DatabaseConnection) -> Self { Self { db } }
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
+    }
 }
 
 #[async_trait]
@@ -25,9 +32,7 @@ impl UserRepository for PostgresUserRepository {
         user.ok_or(DbErr::RecordNotFound(String::from("User not found")))
     }
     async fn find_by_id(&self, id: Uuid) -> Result<UserModel, DbErr> {
-        let user = UserEntity::find_by_id(id)
-            .one(&self.db)
-            .await?;
+        let user = UserEntity::find_by_id(id).one(&self.db).await?;
 
         user.ok_or(DbErr::RecordNotFound(format!("User {} not found", id)))
     }
@@ -52,7 +57,13 @@ impl UserRepository for PostgresUserRepository {
         Ok(users)
     }
 
-    async fn create(&self, username: String, email: String, password_hash: String, profile_pic_url: String) -> Result<(), DbErr> {
+    async fn create(
+        &self,
+        username: String,
+        email: String,
+        password_hash: String,
+        profile_pic_url: String,
+    ) -> Result<(), DbErr> {
         let user = UserActiveModel {
             user_id: Set(Uuid::new_v4()),
             username: Set(username),
@@ -72,9 +83,7 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn delete_by_id(&self, id: Uuid) -> Result<(), DbErr> {
-        UserEntity::delete_by_id(id)
-            .exec(&self.db)
-            .await?;
+        UserEntity::delete_by_id(id).exec(&self.db).await?;
         Ok(())
     }
 
@@ -103,7 +112,7 @@ impl UserRepository for PostgresUserRepository {
         }
 
         active_user.update(&self.db).await?;
-        
+
         Ok(())
     }
 
@@ -112,7 +121,7 @@ impl UserRepository for PostgresUserRepository {
             .filter(
                 Condition::any()
                     .add(UserColumn::Email.eq(email_or_username))
-                    .add(UserColumn::Username.eq(email_or_username))
+                    .add(UserColumn::Username.eq(email_or_username)),
             )
             .one(&self.db)
             .await?;

@@ -1,16 +1,12 @@
-use std::sync::Arc;
 use argon2::password_hash::Error;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
-use axum::Json;
 use chrono::Duration;
-use sea_orm::{DbErr};
+use sea_orm::DbErr;
 use serde::Deserialize;
+use std::sync::Arc;
 
-use crate::{
-    application::{password_hasher::PasswordHasher},
-    presentation::{requests::login_request::LoginRequest, responses::login_response::LoginResponse},
-};
 use crate::application::jwt_provider::JwtProvider;
 use crate::application::repositories::token_repository::TokenRepository;
 use crate::domain::claims::Claims;
@@ -19,6 +15,12 @@ use crate::infrastructure::app_state::AppState;
 use crate::presentation::requests::registration_request::RegistrationRequest;
 use crate::presentation::requests::update_request::UpdateRequest;
 use crate::presentation::responses::user_response::UserResponse;
+use crate::{
+    application::password_hasher::PasswordHasher,
+    presentation::{
+        requests::login_request::LoginRequest, responses::login_response::LoginResponse,
+    },
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
@@ -46,44 +48,45 @@ pub async fn registration_handler(
     let password = registration_request.password;
     let password_hasher = state.password_hasher.clone();
 
-    
-    let password_hash = match tokio::task::spawn_blocking(move || {
-        password_hasher.hash_password(&password)
-    })
-    .await{
-        Ok(Ok(hash)) => hash,
-        Ok(Err(_)) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    let password_hash =
+        match tokio::task::spawn_blocking(move || password_hasher.hash_password(&password)).await {
+            Ok(Ok(hash)) => hash,
+            Ok(Err(_)) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        };
 
-    match state.user_repository.create(username, email, password_hash, profile_pic_url.unwrap()).await {
+    match state
+        .user_repository
+        .create(username, email, password_hash, profile_pic_url.unwrap())
+        .await
+    {
         Ok(_) => {
             let info = "You are registered".to_string();
             Ok(Json(info))
         }
-        Err(_) => {
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
     // Реализовать аутентификацию после регистрации
 }
 
 pub async fn login_handler(
     State(state): State<Arc<AppState>>,
-    Json(login_request) : Json<LoginRequest>
+    Json(login_request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // Поиск пользователя по почте
-    let user = match state.user_repository.find_by_email(&login_request.username).await {
+    let user = match state
+        .user_repository
+        .find_by_email(&login_request.username)
+        .await
+    {
         Ok(user) => user,
         Err(DbErr::RecordNotFound(_)) => return Err(StatusCode::UNAUTHORIZED),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-
     let password = &login_request.password;
 
-    let is_valid = match is_valid_user(&user, password, &state.password_hasher)
-        .await {
+    let is_valid = match is_valid_user(&user, password, &state.password_hasher).await {
         Ok(is_valid) => is_valid,
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
@@ -92,11 +95,10 @@ pub async fn login_handler(
         // вывести в отдельный метод генерацию пары токенов
         let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;;
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         Ok(Json(tokens))
-    }
-    else {
+    } else {
         Err(StatusCode::UNAUTHORIZED)
     }
 }
@@ -144,7 +146,7 @@ pub async fn get_current_user_handler(
 pub async fn update_current_user_handler(
     State(state): State<Arc<AppState>>,
     header_map: HeaderMap,
-    Json(update_request): Json<UpdateRequest>
+    Json(update_request): Json<UpdateRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // 1. Аутентификация
     let claims = match extract_and_validate_token(&state.jwt_provider, &header_map) {
@@ -182,14 +184,17 @@ pub async fn update_current_user_handler(
         .find_by_id(claims.sub)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // 6. Инвалидируем старые токены
-    state.token_repository.delete_all_refresh_tokens(&updated_user.user_id)
+    state
+        .token_repository
+        .delete_all_refresh_tokens(&updated_user.user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // 7. Генерируем новые токены
-    let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &updated_user).await?;
+    let tokens =
+        generate_tokens(&state.jwt_provider, &state.token_repository, &updated_user).await?;
 
     // 8. Конвертируем в UserResponse и возвращаем
     Ok(Json(tokens))
@@ -199,17 +204,21 @@ pub async fn get_users_handler(
     State(state): State<Arc<AppState>>,
     Query(pagination): Query<Pagination>,
 ) -> Result<Json<Vec<UserResponse>>, StatusCode> {
-    let users = state.user_repository.list_users(pagination.page, pagination.page_size)
+    let users = state
+        .user_repository
+        .list_users(pagination.page, pagination.page_size)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let user_response = users.into_iter().
-        map(|user| UserResponse {
+    let user_response = users
+        .into_iter()
+        .map(|user| UserResponse {
             user_id: user.user_id,
             username: user.username,
             email: user.email,
-            role: user.role
-        }).collect::<Vec<UserResponse>>();
+            role: user.role,
+        })
+        .collect::<Vec<UserResponse>>();
 
     Ok(Json(user_response))
 }
@@ -218,20 +227,20 @@ pub async fn get_user_handler(
     State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> Result<Json<UserResponse>, StatusCode> {
-    let user = state.user_repository.find_by_name(&username)
+    let user = state
+        .user_repository
+        .find_by_name(&username)
         .await
-        .map_err(|e| {
-            match e {
-                DbErr::RecordNotFound(_) => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR
-            }
+        .map_err(|e| match e {
+            DbErr::RecordNotFound(_) => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         })?;
 
     let user_response = UserResponse {
         user_id: user.user_id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
     };
 
     Ok(Json(user_response))
@@ -267,10 +276,9 @@ async fn generate_tokens(
         .generate_refresh_token(&user.username, &user.user_id, &user.role)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-
-    let refresh_token_id = match jwt_provider.verify_refresh_token(&refresh_token){
+    let refresh_token_id = match jwt_provider.verify_refresh_token(&refresh_token) {
         Ok(refresh_token_id) => refresh_token_id.jti,
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
     // Сохранение refresh токена

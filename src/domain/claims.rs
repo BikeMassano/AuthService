@@ -1,6 +1,6 @@
+use crate::domain::enums::token_type::TokenType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::domain::enums::token_type::TokenType;
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
@@ -11,5 +11,5 @@ pub struct Claims {
     pub token_type: TokenType,
     pub iat: i64,
     pub iss: String,
-    pub jti: Option<Uuid>
+    pub jti: Option<Uuid>,
 }

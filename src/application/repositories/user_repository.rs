@@ -1,5 +1,5 @@
-use sea_orm::{Condition, DbErr};
 use sea_orm::prelude::async_trait::async_trait;
+use sea_orm::{Condition, DbErr};
 use sqlx::types::Uuid;
 
 use crate::domain::entities::users::{Column, Entity, Model as UserModel, Model};
@@ -19,7 +19,7 @@ pub trait UserRepository: Send + Sync {
     /// * `Result<UserModel, DbErr>` - модель пользователя при успешном поиске,
     /// либо ошибка базы данных.
     async fn find_by_name(&self, name: &str) -> Result<UserModel, DbErr>;
-    
+
     /// Находит пользователя по уникальному идентификатору.
     ///
     /// # Параметры
@@ -60,7 +60,13 @@ pub trait UserRepository: Send + Sync {
     /// # Возвращаемое значение
     /// * `Result<(), DbErr>` - Ok(()) при успешном создании,
     /// либо ошибка базы данных.
-    async fn create (&self, username: String, email: String, password_hash: String, profile_pic_url: String) -> Result<(), DbErr>;
+    async fn create(
+        &self,
+        username: String,
+        email: String,
+        password_hash: String,
+        profile_pic_url: String,
+    ) -> Result<(), DbErr>;
 
     /// Удаляет пользователя по идентификатору.
     ///
