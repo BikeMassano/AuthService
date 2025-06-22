@@ -43,6 +43,7 @@ impl JwtProvider for RsaJwtProvider {
         id: &Uuid,
         role: &Role,
     ) -> Result<String, JwtError> {
+        // Заполняем данные для токена
         let claims = Claims {
             sub: id.to_owned(),
             name: username.to_owned(),
@@ -54,26 +55,26 @@ impl JwtProvider for RsaJwtProvider {
             iat: chrono::Utc::now().timestamp(),
             jti: None,
         };
-
+        // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
-
+        // Возвращаем токен
         Ok(token)
     }
 
     fn verify_access_token(&self, token: &str) -> Result<Claims, JwtError> {
+        // Настройки валидации токена
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_issuer(&[&self.issuer]);
         validation.leeway = 3;
         validation.set_required_spec_claims(&["exp", "iss", "sub", "token_type"]);
         validation.validate_exp = true;
-
+        // Декодируем токен, получаем Claims
         let token_data = jsonwebtoken::decode::<Claims>(token, &self.decoding_key, &validation)?;
-
-        // проверка, что это access токен
+        // Проверяем, что это access-токен
         if token_data.claims.token_type != TokenType::Access {
             return Err(JwtError::from(ErrorKind::InvalidToken));
         }
-
+        // Возвращаем Claims из токена
         Ok(token_data.claims)
     }
 
@@ -83,6 +84,7 @@ impl JwtProvider for RsaJwtProvider {
         id: &Uuid,
         role: &Role,
     ) -> Result<String, JwtError> {
+        // Заполняем данные для токена
         let claims = Claims {
             sub: id.to_owned(),
             name: username.to_owned(),
@@ -93,26 +95,26 @@ impl JwtProvider for RsaJwtProvider {
             iat: chrono::Utc::now().timestamp(),
             jti: Some(Uuid::new_v4()),
         };
-
+        // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
-
+        // Возвращаем токен
         Ok(token)
     }
 
     fn verify_refresh_token(&self, token: &str) -> Result<Claims, JwtError> {
+        // Настройки валидации токена
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_issuer(&[&self.issuer]);
         validation.leeway = 3;
         validation.set_required_spec_claims(&["exp", "iss", "sub", "token_type"]);
         validation.validate_exp = true;
-
+        // Декодируем токен, получаем Claims
         let token_data = jsonwebtoken::decode::<Claims>(token, &self.decoding_key, &validation)?;
-
-        // Проверяем, что это именно refresh-токен
+        // Проверяем, что это refresh-токен
         if token_data.claims.token_type != TokenType::Refresh {
             return Err(JwtError::from(ErrorKind::InvalidToken));
         }
-
+        // Возвращаем Claims из токена
         Ok(token_data.claims)
     }
 }

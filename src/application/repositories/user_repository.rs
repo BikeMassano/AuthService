@@ -65,7 +65,7 @@ pub trait UserRepository: Send + Sync {
         username: String,
         email: String,
         password_hash: String,
-        profile_pic_url: String,
+        profile_pic_url: Option<String>,
     ) -> Result<(), DbErr>;
 
     /// Удаляет пользователя по идентификатору.

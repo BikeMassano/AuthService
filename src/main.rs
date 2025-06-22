@@ -1,7 +1,6 @@
-use axum::routing::patch;
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use dotenv::dotenv;
 use sea_orm::Database;
@@ -62,6 +61,7 @@ async fn main() {
     let token_db_url = env::var("TOKEN_DATABASE_URL").expect("TOKEN_DATABASE_URL must be set");
 
     // Инстанцируем сервисы
+    // Сервис работы JWT токенами
     let jwt_provider: Arc<dyn JwtProvider> = Arc::new(
         RsaJwtProvider::new(
             &private_key,
@@ -72,13 +72,16 @@ async fn main() {
         )
         .expect("Failed to create jwt provider"),
     );
-    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(Argon2PasswordHasher::new());
+    // Сервис для хеширования паролей
+    let password_hasher: Arc<dyn PasswordHasher> =
+        Arc::new(Argon2PasswordHasher::new().expect("Failed to create password hasher"));
+    // Репозиторий для работы с БД пользователей
     let user_repository: Arc<dyn UserRepository> =
         Arc::new(PostgresUserRepository::new(user_db_connection));
+    // Репозиторий для работы с БД refresh токенов в redis
     let token_repository: Arc<dyn TokenRepository> = Arc::new(
         RedisTokenRepository::new(&token_db_url).expect("Failed to create Redis token repository"),
     );
-
     // Внедряем сервисы в контейнер зависимостей
     let app_state = Arc::new(AppState {
         jwt_provider,

@@ -3,6 +3,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use chrono::Duration;
+use jsonwebtoken::errors::ErrorKind;
 use sea_orm::DbErr;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -32,19 +33,21 @@ pub async fn registration_handler(
     State(state): State<Arc<AppState>>,
     Json(registration_request): Json<RegistrationRequest>,
 ) -> Result<Json<String>, StatusCode> {
+    // Данные для регистрации
     let username = registration_request.username;
     let email = registration_request.email;
     let profile_pic_url = registration_request.profile_pic_url;
 
+    // Таски для проверки существования пользователей в бд
     let username_check = state.user_repository.find_by_name(&username);
     let email_check = state.user_repository.find_by_email(&email);
-
+    // Запуск тасок
     let (username_result, email_result) = tokio::join!(username_check, email_check);
-
+    // Если нашли пользователя, то выбрасываем ошибку
     if username_result.is_ok() || email_result.is_ok() {
         return Err(StatusCode::CONFLICT);
     }
-
+    // Хешируем пароль пользователя
     let password = registration_request.password;
     let password_hasher = state.password_hasher.clone();
 
@@ -54,17 +57,16 @@ pub async fn registration_handler(
             Ok(Err(_)) => return Err(StatusCode::UNPROCESSABLE_ENTITY),
             Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         };
-
+    // Заносим пользователя в БД
     match state
         .user_repository
-        .create(username, email, password_hash, profile_pic_url.unwrap())
-        .await
-    {
-        Ok(_) => {
-            let info = "You are registered".to_string();
-            Ok(Json(info))
-        }
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        .create(username, email, password_hash, profile_pic_url)
+        .await {
+            Ok(_) => {
+                let info = "You are registered".to_string();
+                Ok(Json(info))
+            }
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
     // Реализовать аутентификацию после регистрации
 }
@@ -83,20 +85,19 @@ pub async fn login_handler(
         Err(DbErr::RecordNotFound(_)) => return Err(StatusCode::UNAUTHORIZED),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
-
+    // Пароль из запроса на аутентификацию
     let password = &login_request.password;
-
+    // Проверка пароля на валидность
     let is_valid = match is_valid_user(&user, password, &state.password_hasher).await {
         Ok(is_valid) => is_valid,
+        Err(Error::Crypto) => return Err(StatusCode::UNAUTHORIZED),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
     if is_valid {
-        // вывести в отдельный метод генерацию пары токенов
         let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
         Ok(Json(tokens))
     } else {
         Err(StatusCode::UNAUTHORIZED)
@@ -277,13 +278,24 @@ async fn generate_tokens(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let refresh_token_id = match jwt_provider.verify_refresh_token(&refresh_token) {
-        Ok(refresh_token_id) => refresh_token_id.jti,
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(claims) => claims.jti,
+        Err(e) => {
+            return match e.kind() {
+                ErrorKind::InvalidToken => Err(StatusCode::UNAUTHORIZED),
+                ErrorKind::ExpiredSignature => Err(StatusCode::UNAUTHORIZED),
+                _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            };
+        }
     };
 
     // Сохранение refresh токена
     token_repository
-        .save_refresh_token(&user.user_id, &refresh_token_id, Duration::days(15))
+        .save_refresh_token(
+            &user.user_id,
+            &refresh_token_id,
+            &refresh_token,
+            Duration::days(15),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -299,7 +311,7 @@ async fn is_valid_user(
     password: &str,
     password_hasher: &Arc<dyn PasswordHasher>,
 ) -> Result<bool, Error> {
-    // получаем захэшированный пароль
+    // получаем захешированный пароль
     let password_hash = user.password_hash.clone();
     let password = password.to_owned();
     let password_hasher = password_hasher.clone();

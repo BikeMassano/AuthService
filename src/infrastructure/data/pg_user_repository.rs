@@ -62,7 +62,7 @@ impl UserRepository for PostgresUserRepository {
         username: String,
         email: String,
         password_hash: String,
-        profile_pic_url: String,
+        profile_pic_url: Option<String>,
     ) -> Result<(), DbErr> {
         let user = UserActiveModel {
             user_id: Set(Uuid::new_v4()),
