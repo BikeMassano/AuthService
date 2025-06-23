@@ -9,7 +9,8 @@ use std::{env, sync::Arc};
 use crate::application::repositories::token_repository::TokenRepository;
 use crate::infrastructure::data::redis_token_repository::RedisTokenRepository;
 use crate::presentation::controller::{
-    get_current_user_handler, get_user_handler, get_users_handler, update_current_user_handler,
+    get_current_user_handler, get_user_handler, get_users_handler, refresh_handler,
+    update_current_user_handler,
 };
 use crate::{
     application::{
@@ -97,6 +98,7 @@ async fn main() {
         .route("/admin/users", get(get_users_handler))
         .route("/admin/users/{username}", get(get_user_handler))
         .route("/me", patch(update_current_user_handler))
+        .route("/refresh", post(refresh_handler))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8080))

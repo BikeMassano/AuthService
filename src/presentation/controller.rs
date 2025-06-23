@@ -1,18 +1,9 @@
-use argon2::password_hash::Error;
-use axum::Json;
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use chrono::Duration;
-use jsonwebtoken::errors::ErrorKind;
-use sea_orm::DbErr;
-use serde::Deserialize;
-use std::sync::Arc;
-
 use crate::application::jwt_provider::JwtProvider;
 use crate::application::repositories::token_repository::TokenRepository;
 use crate::domain::claims::Claims;
 use crate::domain::entities::users::Model as UserModel;
 use crate::infrastructure::app_state::AppState;
+use crate::presentation::requests::refresh_request::RefreshRequest;
 use crate::presentation::requests::registration_request::RegistrationRequest;
 use crate::presentation::requests::update_request::UpdateRequest;
 use crate::presentation::responses::user_response::UserResponse;
@@ -22,6 +13,15 @@ use crate::{
         requests::login_request::LoginRequest, responses::login_response::LoginResponse,
     },
 };
+use argon2::password_hash::Error;
+use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, StatusCode};
+use chrono::Duration;
+use jsonwebtoken::errors::ErrorKind;
+use sea_orm::DbErr;
+use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
@@ -61,14 +61,14 @@ pub async fn registration_handler(
     match state
         .user_repository
         .create(username, email, password_hash, profile_pic_url)
-        .await {
-            Ok(_) => {
-                let info = "You are registered".to_string();
-                Ok(Json(info))
-            }
-            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        .await
+    {
+        Ok(_) => {
+            let info = "You are registered".to_string();
+            Ok(Json(info))
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-    // Реализовать аутентификацию после регистрации
 }
 
 pub async fn login_handler(
@@ -78,7 +78,7 @@ pub async fn login_handler(
     // Поиск пользователя по почте
     let user = match state
         .user_repository
-        .find_by_email(&login_request.username)
+        .find_by_email(&login_request.email)
         .await
     {
         Ok(user) => user,
@@ -93,7 +93,7 @@ pub async fn login_handler(
         Err(Error::Crypto) => return Err(StatusCode::UNAUTHORIZED),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
-
+    // Если пароль валиден - возвращаем пару токенов
     if is_valid {
         let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user)
             .await
@@ -108,14 +108,45 @@ pub async fn logout_handler() -> Result<Json<String>, StatusCode> {
     todo!()
 }
 
-pub async fn refresh_handler() -> Result<Json<String>, StatusCode> {
+pub async fn refresh_handler(
+    State(state): State<Arc<AppState>>,
+    Json(refresh_request): Json<RefreshRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    let user_id = &refresh_request.user_id;
+    let token_id = &refresh_request.token_id;
+    // данные о сессии
+    let session_data = match state
+        .token_repository
+        .find_refresh_token(user_id, token_id)
+        .await
+    {
+        Ok(Some(data)) => data,
+        Ok(None) => return Err(StatusCode::UNAUTHORIZED), // Токен не найден
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
     // верифицировать токен
-    // проверить отзыв токена
+    let _ = &state
+        .jwt_provider
+        .verify_refresh_token(&session_data.token)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
     // найти пользователя
-    // сгенерировать новую пару токенов
-    // занести новый refresh токен в бд redis
-
-    todo!()
+    let user = match state.user_repository.find_by_id(user_id.clone()).await {
+        Ok(user) => user,
+        Err(DbErr::RecordNotFound(_)) => return Err(StatusCode::UNAUTHORIZED),
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+    // сгенерировать новую пару токенов и занести refresh токен в бд
+    let tokens = generate_tokens(&state.jwt_provider, &state.token_repository, &user)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // инвалидировать старый refresh токен
+    let _ = &state
+        .token_repository
+        .delete_refresh_token(user_id, token_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // возвращаем пару токенов
+    Ok(Json(tokens))
 }
 
 pub async fn delete_token_handler() -> Result<Json<String>, StatusCode> {
