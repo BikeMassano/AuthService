@@ -47,7 +47,12 @@ pub trait UserRepository: Send + Sync {
     /// # Возвращаемое значение
     /// * `Result<Vec<UserModel>, DbErr>` - вектор моделей пользователей,
     /// либо ошибка базы данных.
-    async fn list_users(&self, page: u32, page_size: u32) -> Result<Vec<UserModel>, DbErr>;
+    async fn list_users(
+        &self,
+        page: u32,
+        page_size: u32,
+        search: Option<String>,
+    ) -> Result<Vec<UserModel>, DbErr>;
 
     /// Создает нового пользователя.
     ///

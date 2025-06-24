@@ -1,9 +1,11 @@
 use argon2::password_hash::Error;
+use sea_orm::prelude::async_trait::async_trait;
 
 /// Трейт для безопасного хеширования и верификации паролей.
 ///
 /// Определяет стандартный интерфейс для преобразования паролей в хеши
 /// и проверки их соответствия.
+#[async_trait]
 pub trait PasswordHasher: Send + Sync {
     /// Генерирует хеш для заданного пароля.
     ///
@@ -12,7 +14,7 @@ pub trait PasswordHasher: Send + Sync {
     ///
     /// # Возвращаемое значение
     /// * `String`, содержащий хеш пароля.
-    fn hash_password(&self, password: &str) -> Result<String, Error>;
+    async fn hash_password(&self, password: &str) -> Result<String, Error>;
     /// Проверяет соответствие переданного пароля его хешу.
     ///
     /// # Параметры
@@ -21,5 +23,5 @@ pub trait PasswordHasher: Send + Sync {
     ///
     /// # Возвращаемое значение
     /// * `true`, если пароль соответствует хешу, `false` в противном случае.
-    fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, Error>;
+    async fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, Error>;
 }

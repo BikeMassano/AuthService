@@ -46,11 +46,24 @@ impl UserRepository for PostgresUserRepository {
         user.ok_or(DbErr::RecordNotFound(String::from("User not found")))
     }
 
-    async fn list_users(&self, page: u32, page_size: u32) -> Result<Vec<UserModel>, DbErr> {
-        let users = UserEntity::find()
-            .order_by_asc(UserColumn::UserId)
+    async fn list_users(
+        &self,
+        page: u32,
+        page_size: u32,
+        search: Option<String>,
+    ) -> Result<Vec<UserModel>, DbErr> {
+        let mut query = UserEntity::find().order_by_asc(UserColumn::UserId);
+
+        // Добавляем фильтрацию по username если search указан
+        if let Some(search_term) = search {
+            query = query.filter(UserColumn::Username.like(format!("%{}%", search_term)));
+        }
+
+        let page_size = if page_size == 0 { 10 } else { page_size }; // защита от page_size = 0
+
+        let users = query
             .limit(page_size as u64)
-            .offset((page.saturating_sub(1) * page_size) as u64)
+            .offset((page as u64).saturating_mul(page_size as u64))
             .all(&self.db)
             .await?;
 

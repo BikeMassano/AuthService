@@ -6,50 +6,65 @@ use argon2::{
         PasswordHash, PasswordHasher as PH, PasswordVerifier, SaltString, rand_core::OsRng,
     },
 };
+use sea_orm::prelude::async_trait::async_trait;
+use std::sync::Arc;
 
 pub struct Argon2PasswordHasher {
     argon2: Argon2<'static>,
+    dummy_hash: Arc<str>,
 }
 
 impl Argon2PasswordHasher {
-    pub fn new() -> Result<Self, argon2::Error> {
+    pub fn new(dummy_hash: String) -> Result<Self, Error> {
         let argon2 = Argon2::new(
             argon2::Algorithm::Argon2id,
             argon2::Version::V0x13,
             Params::new(7168, 2, 1, None)?,
         );
 
-        Ok(Self { argon2 })
+        Ok(Self {
+            argon2,
+            dummy_hash: dummy_hash.into(),
+        })
     }
 }
 
+#[async_trait]
 impl PasswordHasher for Argon2PasswordHasher {
-    fn hash_password(&self, password: &str) -> Result<String, Error> {
-        let salt = SaltString::generate(&mut OsRng);
+    async fn hash_password(&self, password: &str) -> Result<String, Error> {
+        let password = password.as_bytes().to_vec();
+        let argon2 = self.argon2.clone();
 
-        let password_hash = self
-            .argon2
-            .hash_password(password.as_bytes(), &salt)?
-            .to_string();
+        tokio::task::spawn_blocking(move || {
+            let salt = SaltString::generate(&mut OsRng);
 
-        Ok(password_hash)
+            argon2
+                .hash_password(&password, &salt)
+                .map(|hash| hash.to_string())
+        })
+        .await
+        .map_err(|_| Error::Crypto)?
     }
 
-    fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, Error> {
-        let parsed_hash = match PasswordHash::new(password_hash) {
-            Ok(hash) => hash,
-            Err(e) => {
-                // фиктивная проверка пароля для защиты от атак по времени
-                let fake_hash = PasswordHash::new("$argon2id$v=19$m=7168,t=2,p=1$dummy").unwrap();
-                let _ = self.argon2.verify_password(password.as_bytes(), &fake_hash);
+    async fn verify_password(&self, password: &str, password_hash: &str) -> Result<bool, Error> {
+        let password = password.as_bytes().to_vec();
+        let password_hash = password_hash.to_string();
+        let argon2 = self.argon2.clone();
+        let dummy_hash = self.dummy_hash.clone();
 
-                return Err(e);
-            }
-        };
-
-        Ok(self
-            .argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok())
+        tokio::task::spawn_blocking(move || {
+            let parsed_hash = match PasswordHash::new(&password_hash) {
+                Ok(hash) => hash,
+                Err(e) => {
+                    // Фиктивная проверка для защиты от timing-атак
+                    let fake_hash = PasswordHash::new(&dummy_hash).map_err(|_| Error::Crypto)?;
+                    let _ = argon2.verify_password(&password, &fake_hash);
+                    return Err(e);
+                }
+            };
+            Ok(argon2.verify_password(&password, &parsed_hash).is_ok())
+        })
+        .await
+        .map_err(|_| Error::Crypto)?
     }
 }
