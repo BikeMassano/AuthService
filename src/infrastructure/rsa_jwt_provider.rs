@@ -9,6 +9,7 @@ use jsonwebtoken::{
 };
 use sea_orm::ActiveEnum;
 use uuid::Uuid;
+use crate::domain::models::token_data::TokenData;
 
 pub struct RsaJwtProvider {
     decoding_key: DecodingKey,
@@ -42,7 +43,7 @@ impl JwtProvider for RsaJwtProvider {
         username: &str,
         id: &Uuid,
         role: &Role,
-    ) -> Result<String, JwtError> {
+    ) -> Result<TokenData, JwtError> {
         // Заполняем данные для токена
         let claims = Claims {
             sub: id.to_owned(),
@@ -53,12 +54,13 @@ impl JwtProvider for RsaJwtProvider {
             token_type: TokenType::Access,
             iss: self.issuer.clone(),
             iat: chrono::Utc::now().timestamp(),
-            jti: None,
+            jti: Uuid::new_v4(),
         };
         // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
         // Возвращаем токен
-        Ok(token)
+        let token_data = TokenData {token, claims};
+        Ok(token_data)
     }
 
     fn verify_access_token(&self, token: &str) -> Result<Claims, JwtError> {
@@ -83,7 +85,7 @@ impl JwtProvider for RsaJwtProvider {
         username: &str,
         id: &Uuid,
         role: &Role,
-    ) -> Result<String, JwtError> {
+    ) -> Result<TokenData, JwtError> {
         // Заполняем данные для токена
         let claims = Claims {
             sub: id.to_owned(),
@@ -93,12 +95,13 @@ impl JwtProvider for RsaJwtProvider {
             token_type: TokenType::Refresh,
             iss: self.issuer.clone(),
             iat: chrono::Utc::now().timestamp(),
-            jti: Some(Uuid::new_v4()),
+            jti: Uuid::new_v4(),
         };
         // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
         // Возвращаем токен
-        Ok(token)
+        let token_data = TokenData {token, claims};
+        Ok(token_data)
     }
 
     fn verify_refresh_token(&self, token: &str) -> Result<Claims, JwtError> {

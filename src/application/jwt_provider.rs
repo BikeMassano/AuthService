@@ -2,6 +2,7 @@ use crate::domain::claims::Claims;
 use crate::domain::enums::roles::Role;
 use jsonwebtoken::errors::Error as JwtError;
 use uuid::Uuid;
+use crate::domain::models::token_data::TokenData;
 
 /// Трейт для работы с Json Web Tokens (JWT)
 ///
@@ -23,7 +24,7 @@ pub trait JwtProvider: Send + Sync {
         username: &str,
         id: &Uuid,
         role: &Role,
-    ) -> Result<String, JwtError>;
+    ) -> Result<TokenData, JwtError>;
     /// Проверяет и декодирует JWT access токен.
     ///
     /// # Параметры
@@ -49,7 +50,7 @@ pub trait JwtProvider: Send + Sync {
         username: &str,
         id: &Uuid,
         role: &Role,
-    ) -> Result<String, JwtError>;
+    ) -> Result<TokenData, JwtError>;
     /// Проверяет и декодирует JWT refresh токен.
     ///
     /// # Параметры
