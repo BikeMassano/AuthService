@@ -27,7 +27,8 @@ impl TokenRepository for RedisTokenRepository {
         token_id: &Uuid,
         token: &str,
         expires_in: Duration,
-        access_jti: &Uuid,
+        user_agent: &str,
+        ip_address: &str,
     ) -> Result<(), Box<dyn Error>> {
         // Создаём соединение с Redis
         let mut conn = self.pool.get().await?;
@@ -41,8 +42,11 @@ impl TokenRepository for RedisTokenRepository {
 
         let session_data = SessionData {
             token: token.to_string(),
+            token_id: *token_id,
             expires_at: expires_at.timestamp(),
             issued_at: issued_at.timestamp(),
+            user_agent: user_agent.to_string(),
+            ip_address: ip_address.to_string(),
         };
 
         let session_json = serde_json::to_string(&session_data)?;

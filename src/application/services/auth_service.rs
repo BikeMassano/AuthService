@@ -14,6 +14,7 @@ use chrono::Duration;
 use sea_orm::DbErr;
 use std::sync::Arc;
 use uuid::Uuid;
+use crate::domain::models::session_data::SessionData;
 
 pub struct AuthService {
     user_repo: Arc<dyn UserRepository>,
@@ -85,7 +86,11 @@ impl AuthService {
 
         // Генерация пары access + refresh токенов
         if is_valid {
-            let tokens = self.generate_tokens(user).await?;
+            let tokens = self.generate_tokens(
+                user,
+                &login_data.user_agent,
+                &login_data.ip_address
+            ).await?;
             Ok(tokens)
         } else {
             Err(InvalidCredentials)
@@ -116,7 +121,11 @@ impl AuthService {
             .map_err(|_| InvalidCredentials)?;
 
         // сгенерировать новую пару токенов и занести refresh токен в бд
-        let tokens = self.generate_tokens(user).await?;
+        let tokens = self.generate_tokens(
+            user,
+            &refresh_data.user_agent,
+            &refresh_data.ip_address
+        ).await?;
 
         // инвалидировать старый refresh токен
         self.token_repo
@@ -146,8 +155,23 @@ impl AuthService {
             .map_err(|_| TokenError)?;
         Ok(())
     }
+    
+    pub async fn get_user_sessions(&self, user_name: &str) -> Result<Vec<SessionData>, AuthError> {
+        let user = self.user_repo.find_by_name(user_name).await?;
+        
+        let sessions = self.token_repo
+            .find_user_refresh_tokens(&user.user_id)
+            .await
+            .map_err(|_| TokenError)?;
+        Ok(sessions)
+    }
 
-    async fn generate_tokens(&self, user: UserModel) -> Result<(String, Uuid), AuthError> {
+    async fn generate_tokens(
+        &self,
+        user: UserModel,
+        user_agent: &str,
+        ip_address: &str,
+    ) -> Result<(String, Uuid), AuthError> {
         // Генерация access токена
         let access_token_data = self
             .jwt_provider
@@ -167,7 +191,8 @@ impl AuthService {
                 &refresh_token_data.claims.jti,
                 &refresh_token_data.token,
                 Duration::days(15),
-                &access_token_data.claims.jti
+                user_agent,
+                ip_address,
             )
             .await
             .map_err(|_| TokenError)?;
