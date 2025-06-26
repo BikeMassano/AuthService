@@ -27,8 +27,9 @@ pub trait TokenRepository: Send + Sync {
         token_id: &Uuid,
         token: &str,
         expires_in: Duration,
-        access_jti: &Uuid,
-    ) -> Result<(), Box<dyn Error>>;
+        user_agent: &str,
+        ip_address: &str,
+    )-> Result<(), Box<dyn Error>>;
     /// Проверяет существование refresh токена для пользователя с указанным id.
     ///
     /// # Параметры

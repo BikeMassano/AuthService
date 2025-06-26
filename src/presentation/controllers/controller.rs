@@ -5,7 +5,7 @@ use crate::domain::models::refresh_data::RefreshData;
 use crate::domain::models::registration_data::RegistrationData;
 use crate::domain::models::users_query_data::UserQueryParams;
 use crate::infrastructure::app_state::AppState;
-use crate::presentation::requests::leave_all_request::LeaveAllRequest;
+use crate::presentation::requests::logout_all_request::LogoutAllRequest;
 use crate::presentation::requests::login_request::LoginRequest;
 use crate::presentation::requests::refresh_request::RefreshRequest;
 use crate::presentation::requests::registration_request::RegistrationRequest;
@@ -16,7 +16,10 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use std::sync::Arc;
+use chrono::DateTime;
 use uuid::Uuid;
+use crate::presentation::requests::logout_request::LogoutRequest;
+use crate::presentation::responses::session_response::SessionResponse;
 
 pub async fn registration_handler(
     State(state): State<Arc<AppState>>,
@@ -45,6 +48,8 @@ pub async fn login_handler(
     let login_data = LoginData {
         email: login_request.email,
         password: login_request.password,
+        user_agent: login_request.user_agent,
+        ip_address: login_request.ip_address,
     };
 
     match state.auth_service.login(login_data).await {
@@ -59,15 +64,41 @@ pub async fn login_handler(
     }
 }
 
-pub async fn get_sessions_handler() -> Result<Json<Vec<String>>, StatusCode> {
-    todo!()
+pub async fn get_sessions_handler(
+    State(state): State<Arc<AppState>>, 
+    Path(username): Path<String>
+) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+    let sessions = match state.auth_service.get_user_sessions(&username).await {
+        Ok(sessions) => sessions,
+        Err(AuthError::UserNotFound) => return Err(StatusCode::NOT_FOUND),
+        Err(AuthError::DatabaseError(_)) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(AuthError::TokenError) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+    
+    let session_responses = sessions
+        .into_iter()
+        .map(|session| {
+            let created_at = DateTime::from_timestamp(session.issued_at, 0)
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            Ok(SessionResponse {
+                token_id: session.token_id,
+                user_agent: session.user_agent,
+                ip_address: session.ip_address,
+                created_at,
+            })
+        })
+        .collect::<Result<Vec<_>, StatusCode>>()?;
+
+    Ok(Json(session_responses))
 }
 
-pub async fn delete_all_sessions_handler(
+pub async fn logout_all_handler(
     State(state): State<Arc<AppState>>,
-    Json(user_id): Json<Uuid>,
+    Json(logout_all_request): Json<LogoutAllRequest>,
 ) -> Result<(), StatusCode> {
-    match state.auth_service.delete_user_sessions(user_id).await {
+    match state.auth_service.delete_user_sessions(logout_all_request.user_id).await {
         Ok(()) => Ok(()),
         Err(AuthError::TokenError) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -94,6 +125,8 @@ pub async fn refresh_handler(
     let refresh_data = RefreshData {
         user_id: refresh_request.user_id,
         token_id: refresh_request.token_id,
+        user_agent: refresh_request.user_agent,
+        ip_address: refresh_request.ip_address,
     };
 
     match state.auth_service.refresh(refresh_data).await {
@@ -107,12 +140,12 @@ pub async fn refresh_handler(
     }
 }
 
-pub async fn delete_session_handler(
+pub async fn logout_handler(
     State(state): State<Arc<AppState>>,
-    Json(refresh_request): Json<RefreshRequest>,
+    Json(logout_request): Json<LogoutRequest>,
 ) -> Result<(), StatusCode> {
-    let user_id = refresh_request.user_id;
-    let token_id = refresh_request.token_id;
+    let user_id = logout_request.user_id;
+    let token_id = logout_request.token_id;
 
     state
         .auth_service

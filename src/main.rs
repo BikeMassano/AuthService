@@ -20,9 +20,7 @@ use presentation::controllers::controller::{
 
 use crate::application::services::auth_service::AuthService;
 use crate::application::services::user_service::UserService;
-use crate::presentation::controllers::controller::{
-    delete_all_sessions_handler, delete_session_handler,
-};
+use crate::presentation::controllers::controller::{get_sessions_handler, logout_all_handler, logout_handler};
 use axum::{
     Router,
     routing::{get, patch, post},
@@ -130,7 +128,7 @@ async fn main() {
     });
 
     let app = Router::new()
-        .route("/logout", post(delete_session_handler))
+        .route("/sessions/logout", post(logout_handler))
         .route("/login", post(login_handler))
         .route("/registration", post(registration_handler))
         .route("/me", get(get_current_user_handler))
@@ -138,8 +136,8 @@ async fn main() {
         .route("/admin/users/{username}", get(get_user_handler))
         //.route("/me", patch(update_current_user_handler))
         .route("/refresh", post(refresh_handler))
-        .route("/sessions/leave", post(delete_session_handler))
-        .route("/sessions/leave-all", post(delete_all_sessions_handler))
+        .route("/sessions/all/{username}", get(get_sessions_handler))
+        .route("/sessions/leave-all", post(logout_all_handler))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8080))
