@@ -5,6 +5,7 @@ use crate::application::repositories::user_repository::UserRepository;
 use crate::application::services::auth_service::AuthError::{
     InvalidCredentials, TokenError, UserAlreadyExists,
 };
+use crate::domain::claims::Claims;
 use crate::domain::entities::users::Model as UserModel;
 use crate::domain::models::login_data::LoginData;
 use crate::domain::models::refresh_data::RefreshData;
@@ -171,6 +172,12 @@ impl AuthService {
         Ok(sessions)
     }
 
+    pub fn verify_access_token(&self, token: String) -> Result<Claims, AuthError> {
+        self.jwt_provider
+            .verify_access_token(&token)
+            .map_err(|_| TokenError)
+    }
+
     async fn generate_tokens(
         &self,
         user: UserModel,
@@ -215,6 +222,7 @@ pub enum AuthError {
     DatabaseError(DbErr),
     HashingError(Error),
     TokenError,
+    Forbidden,
 }
 
 impl From<DbErr> for AuthError {

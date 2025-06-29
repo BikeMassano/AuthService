@@ -58,7 +58,7 @@ impl PasswordHasher for Argon2PasswordHasher {
                 Err(e) => {
                     // Фиктивная проверка для защиты от timing-атак
                     let fake_hash = PasswordHash::new(&dummy_hash).map_err(|_| Error::Crypto)?;
-                    let _ = argon2.verify_password(&password, &fake_hash);
+                    argon2.verify_password(&password, &fake_hash)?;
                     return Err(e);
                 }
             };

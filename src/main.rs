@@ -10,18 +10,13 @@ use crate::{
         data::pg_user_repository::PostgresUserRepository, rsa_jwt_provider::RsaJwtProvider,
     },
 };
-use presentation::controllers::controller::{
-    get_current_user_handler,
-    get_user_handler,
-    get_users_handler,
-    refresh_handler,
-    //update_current_user_handler,
-};
 
 use crate::application::services::auth_service::AuthService;
 use crate::application::services::user_service::UserService;
 use crate::presentation::controllers::controller::{
-    delete_user_handler, get_sessions_handler, logout_all_handler, logout_handler,
+    delete_user_handler, get_current_user_handler, get_sessions_handler, get_user_handler,
+    get_users_handler, logout_all_handler, logout_handler, refresh_handler,
+    update_current_user_handler,
 };
 use axum::routing::delete;
 use axum::{
@@ -138,7 +133,7 @@ async fn main() {
         .route("/users/delete/{user_id}", delete(delete_user_handler))
         .route("/admin/users", get(get_users_handler))
         .route("/admin/users/{username}", get(get_user_handler))
-        //.route("/me", patch(update_current_user_handler))
+        .route("/me", patch(update_current_user_handler))
         .route("/refresh", post(refresh_handler))
         .route("/sessions/all/{username}", get(get_sessions_handler))
         .route("/sessions/leave-all", post(logout_all_handler))

@@ -2,6 +2,7 @@ use crate::application::services::auth_service::AuthError;
 use crate::domain::models::login_data::LoginData;
 use crate::domain::models::refresh_data::RefreshData;
 use crate::domain::models::registration_data::RegistrationData;
+use crate::domain::models::update_data::UpdateData;
 use crate::domain::models::users_query_data::UserQueryParams;
 use crate::infrastructure::app_state::AppState;
 use crate::presentation::requests::login_request::LoginRequest;
@@ -119,11 +120,11 @@ pub async fn delete_user_handler(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<Uuid>,
 ) -> Result<(), StatusCode> {
-    let _ = match state.auth_service.delete_user_sessions(user_id).await {
+    match state.auth_service.delete_user_sessions(user_id).await {
         Ok(()) => Ok(()),
         Err(AuthError::TokenError) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    }?;
 
     state
         .user_service
@@ -180,15 +181,86 @@ pub async fn get_current_user_handler(
     State(state): State<Arc<AppState>>,
     header_map: HeaderMap,
 ) -> Result<Json<UserResponse>, StatusCode> {
-    todo!()
+    // получаем данные о текущем пользователе
+    let auth_header = header_map
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token_data = state
+        .auth_service
+        .verify_access_token(token.to_string())
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let current_user = state
+        .user_service
+        .get_user_by_id(token_data.sub)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let user_response = UserResponse {
+        username: current_user.username,
+        email: current_user.email,
+        profile_pic_url: current_user.profile_pic_url,
+        user_id: current_user.user_id,
+        role: current_user.role,
+    };
+
+    Ok(Json(user_response))
 }
 
 pub async fn update_current_user_handler(
     State(state): State<Arc<AppState>>,
     header_map: HeaderMap,
     Json(update_request): Json<UpdateRequest>,
-) -> Result<Json<LoginResponse>, StatusCode> {
-    todo!()
+) -> Result<(), StatusCode> {
+    // получаем данные о текущем пользователе
+    let auth_header = header_map
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token_data = state
+        .auth_service
+        .verify_access_token(token.to_string())
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let current_user = state
+        .user_service
+        .get_user_by_id(token_data.sub)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let update_data = UpdateData {
+        username: update_request.username,
+        email: update_request.email,
+        profile_pic_url: update_request.profile_pic_url,
+    };
+
+    state
+        .user_service
+        .update_user(token_data.sub, update_data, &current_user)
+        .await
+        .map_err(|e| match e {
+            AuthError::Forbidden => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+
+    state
+        .auth_service
+        .delete_user_sessions(current_user.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(())
 }
 
 pub async fn get_users_handler(
@@ -254,4 +326,3 @@ pub fn extract_client_info(headers: &HeaderMap) -> (String, String) {
 
     (ip_address, user_agent)
 }
-
