@@ -3,18 +3,18 @@ use crate::application::password_hasher::PasswordHasher;
 use crate::application::repositories::token_repository::TokenRepository;
 use crate::application::repositories::user_repository::UserRepository;
 use crate::application::services::auth_service::AuthError::{
-    InvalidCredentials, TokenError, UserAlreadyExists
+    InvalidCredentials, TokenError, UserAlreadyExists,
 };
 use crate::domain::entities::users::Model as UserModel;
 use crate::domain::models::login_data::LoginData;
 use crate::domain::models::refresh_data::RefreshData;
 use crate::domain::models::registration_data::RegistrationData;
+use crate::domain::models::session_data::SessionData;
 use argon2::password_hash::Error;
 use chrono::Duration;
 use sea_orm::DbErr;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::domain::models::session_data::SessionData;
 
 pub struct AuthService {
     user_repo: Arc<dyn UserRepository>,
@@ -53,7 +53,7 @@ impl AuthService {
         if username_result.is_ok() || email_result.is_ok() {
             return Err(UserAlreadyExists);
         }
-        
+
         // Хешируем пароль пользователя
         let password = registration_data.password;
         let password_hasher = &self.password_hasher;
@@ -86,11 +86,9 @@ impl AuthService {
 
         // Генерация пары access + refresh токенов
         if is_valid {
-            let tokens = self.generate_tokens(
-                user,
-                &login_data.user_agent,
-                &login_data.ip_address
-            ).await?;
+            let tokens = self
+                .generate_tokens(user, &login_data.user_agent, &login_data.ip_address)
+                .await?;
             Ok(tokens)
         } else {
             Err(InvalidCredentials)
@@ -121,11 +119,9 @@ impl AuthService {
             .map_err(|_| InvalidCredentials)?;
 
         // сгенерировать новую пару токенов и занести refresh токен в бд
-        let tokens = self.generate_tokens(
-            user,
-            &refresh_data.user_agent,
-            &refresh_data.ip_address
-        ).await?;
+        let tokens = self
+            .generate_tokens(user, &refresh_data.user_agent, &refresh_data.ip_address)
+            .await?;
 
         // инвалидировать старый refresh токен
         self.token_repo
@@ -135,6 +131,10 @@ impl AuthService {
         // возвращаем пару токенов
 
         Ok(tokens)
+    }
+
+    pub async fn get_current_session(&self, user_id: Uuid) -> Result<SessionData, AuthError> {
+        todo!()
     }
 
     pub async fn delete_user_sessions(&self, user_id: Uuid) -> Result<(), AuthError> {
@@ -147,7 +147,11 @@ impl AuthService {
         Ok(())
     }
 
-    pub async fn delete_user_session(&self, user_id: Uuid, token_id: Uuid) -> Result<(), AuthError> {
+    pub async fn delete_user_session(
+        &self,
+        user_id: Uuid,
+        token_id: Uuid,
+    ) -> Result<(), AuthError> {
         // Удаляем refresh-сессию
         self.token_repo
             .delete_refresh_token(&user_id, &token_id)
@@ -155,11 +159,12 @@ impl AuthService {
             .map_err(|_| TokenError)?;
         Ok(())
     }
-    
+
     pub async fn get_user_sessions(&self, user_name: &str) -> Result<Vec<SessionData>, AuthError> {
         let user = self.user_repo.find_by_name(user_name).await?;
-        
-        let sessions = self.token_repo
+
+        let sessions = self
+            .token_repo
             .find_user_refresh_tokens(&user.user_id)
             .await
             .map_err(|_| TokenError)?;

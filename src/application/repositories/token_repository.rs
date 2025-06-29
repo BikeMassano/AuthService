@@ -29,7 +29,7 @@ pub trait TokenRepository: Send + Sync {
         expires_in: Duration,
         user_agent: &str,
         ip_address: &str,
-    )-> Result<(), Box<dyn Error>>;
+    ) -> Result<(), Box<dyn Error>>;
     /// Проверяет существование refresh токена для пользователя с указанным id.
     ///
     /// # Параметры
@@ -73,6 +73,6 @@ pub trait TokenRepository: Send + Sync {
 
     async fn find_user_refresh_tokens(
         &self,
-        user_id: &Uuid
+        user_id: &Uuid,
     ) -> Result<Vec<SessionData>, Box<dyn Error>>;
 }

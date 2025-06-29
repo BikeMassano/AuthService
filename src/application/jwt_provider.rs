@@ -1,8 +1,8 @@
 use crate::domain::claims::Claims;
 use crate::domain::enums::roles::Role;
+use crate::domain::models::token_data::TokenData;
 use jsonwebtoken::errors::Error as JwtError;
 use uuid::Uuid;
-use crate::domain::models::token_data::TokenData;
 
 /// Трейт для работы с Json Web Tokens (JWT)
 ///

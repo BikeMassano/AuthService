@@ -53,7 +53,8 @@ impl TokenRepository for RedisTokenRepository {
         let ttl_seconds = expires_in.num_seconds().max(1) as u64;
 
         // Сохраняем в БД
-        let _ : () = conn.set_ex(&key, session_json, ttl_seconds)
+        let _: () = conn
+            .set_ex(&key, session_json, ttl_seconds)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
@@ -104,7 +105,7 @@ impl TokenRepository for RedisTokenRepository {
         let keys: Vec<String> = conn.keys(&pattern).await?;
         // Удаляем все найденные ключи
         if !keys.is_empty() {
-            let _ : () = conn.del(keys).await?;
+            let _: () = conn.del(keys).await?;
         }
 
         Ok(())
@@ -112,7 +113,7 @@ impl TokenRepository for RedisTokenRepository {
 
     async fn find_user_refresh_tokens(
         &self,
-        user_id: &Uuid
+        user_id: &Uuid,
     ) -> Result<Vec<SessionData>, Box<dyn Error>> {
         let mut conn = self.pool.get().await?;
         let pattern = format!("USER_REFRESH_TOKEN:{}:*", user_id);

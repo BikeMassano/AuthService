@@ -20,7 +20,10 @@ use presentation::controllers::controller::{
 
 use crate::application::services::auth_service::AuthService;
 use crate::application::services::user_service::UserService;
-use crate::presentation::controllers::controller::{get_sessions_handler, logout_all_handler, logout_handler};
+use crate::presentation::controllers::controller::{
+    delete_user_handler, get_sessions_handler, logout_all_handler, logout_handler,
+};
+use axum::routing::delete;
 use axum::{
     Router,
     routing::{get, patch, post},
@@ -132,6 +135,7 @@ async fn main() {
         .route("/login", post(login_handler))
         .route("/registration", post(registration_handler))
         .route("/me", get(get_current_user_handler))
+        .route("/users/delete/{user_id}", delete(delete_user_handler))
         .route("/admin/users", get(get_users_handler))
         .route("/admin/users/{username}", get(get_user_handler))
         //.route("/me", patch(update_current_user_handler))

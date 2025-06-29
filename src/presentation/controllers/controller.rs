@@ -1,25 +1,25 @@
-use crate::application::repositories::token_repository::TokenRepository;
 use crate::application::services::auth_service::AuthError;
 use crate::domain::models::login_data::LoginData;
 use crate::domain::models::refresh_data::RefreshData;
 use crate::domain::models::registration_data::RegistrationData;
 use crate::domain::models::users_query_data::UserQueryParams;
 use crate::infrastructure::app_state::AppState;
-use crate::presentation::requests::logout_all_request::LogoutAllRequest;
 use crate::presentation::requests::login_request::LoginRequest;
+use crate::presentation::requests::logout_all_request::LogoutAllRequest;
+use crate::presentation::requests::logout_request::LogoutRequest;
 use crate::presentation::requests::refresh_request::RefreshRequest;
 use crate::presentation::requests::registration_request::RegistrationRequest;
 use crate::presentation::requests::update_request::UpdateRequest;
 use crate::presentation::responses::login_response::LoginResponse;
+use crate::presentation::responses::session_response::SessionResponse;
 use crate::presentation::responses::user_response::UserResponse;
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::Request as AxumRequest;
 use axum::http::{HeaderMap, StatusCode};
-use std::sync::Arc;
 use chrono::DateTime;
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::presentation::requests::logout_request::LogoutRequest;
-use crate::presentation::responses::session_response::SessionResponse;
 
 pub async fn registration_handler(
     State(state): State<Arc<AppState>>,
@@ -43,13 +43,18 @@ pub async fn registration_handler(
 
 pub async fn login_handler(
     State(state): State<Arc<AppState>>,
+    // принять заголовок и извлечь токен
+    headers: HeaderMap,
     Json(login_request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
+    // Извлекаем IP и user-agent из заголовков
+    let (ip_address, user_agent) = extract_client_info(&headers);
+
     let login_data = LoginData {
         email: login_request.email,
         password: login_request.password,
-        user_agent: login_request.user_agent,
-        ip_address: login_request.ip_address,
+        user_agent,
+        ip_address,
     };
 
     match state.auth_service.login(login_data).await {
@@ -65,8 +70,8 @@ pub async fn login_handler(
 }
 
 pub async fn get_sessions_handler(
-    State(state): State<Arc<AppState>>, 
-    Path(username): Path<String>
+    State(state): State<Arc<AppState>>,
+    Path(username): Path<String>,
 ) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
     let sessions = match state.auth_service.get_user_sessions(&username).await {
         Ok(sessions) => sessions,
@@ -75,7 +80,7 @@ pub async fn get_sessions_handler(
         Err(AuthError::TokenError) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
-    
+
     let session_responses = sessions
         .into_iter()
         .map(|session| {
@@ -96,9 +101,14 @@ pub async fn get_sessions_handler(
 
 pub async fn logout_all_handler(
     State(state): State<Arc<AppState>>,
+    // принять заголовок и извлечь токен
     Json(logout_all_request): Json<LogoutAllRequest>,
 ) -> Result<(), StatusCode> {
-    match state.auth_service.delete_user_sessions(logout_all_request.user_id).await {
+    match state
+        .auth_service
+        .delete_user_sessions(logout_all_request.user_id)
+        .await
+    {
         Ok(()) => Ok(()),
         Err(AuthError::TokenError) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -109,6 +119,12 @@ pub async fn delete_user_handler(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<Uuid>,
 ) -> Result<(), StatusCode> {
+    let _ = match state.auth_service.delete_user_sessions(user_id).await {
+        Ok(()) => Ok(()),
+        Err(AuthError::TokenError) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
     state
         .user_service
         .delete_user(user_id)
@@ -120,13 +136,17 @@ pub async fn delete_user_handler(
 
 pub async fn refresh_handler(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(refresh_request): Json<RefreshRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
+    // Извлекаем IP и user-agent из заголовков
+    let (ip_address, user_agent) = extract_client_info(&headers);
+
     let refresh_data = RefreshData {
         user_id: refresh_request.user_id,
         token_id: refresh_request.token_id,
-        user_agent: refresh_request.user_agent,
-        ip_address: refresh_request.ip_address,
+        user_agent,
+        ip_address,
     };
 
     match state.auth_service.refresh(refresh_data).await {
@@ -213,3 +233,25 @@ pub async fn get_user_handler(
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
+
+pub fn extract_client_info(headers: &HeaderMap) -> (String, String) {
+    let ip_address = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("unknown")
+        .split(',')
+        .next()
+        .unwrap_or("unknown")
+        .trim()
+        .to_string();
+
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    (ip_address, user_agent)
+}
+

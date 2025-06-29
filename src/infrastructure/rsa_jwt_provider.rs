@@ -1,4 +1,5 @@
 use crate::domain::enums::token_type::TokenType;
+use crate::domain::models::token_data::TokenData;
 use crate::{
     application::jwt_provider::JwtProvider,
     domain::{claims::Claims, enums::roles::Role},
@@ -9,7 +10,6 @@ use jsonwebtoken::{
 };
 use sea_orm::ActiveEnum;
 use uuid::Uuid;
-use crate::domain::models::token_data::TokenData;
 
 pub struct RsaJwtProvider {
     decoding_key: DecodingKey,
@@ -59,7 +59,7 @@ impl JwtProvider for RsaJwtProvider {
         // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
         // Возвращаем токен
-        let token_data = TokenData {token, claims};
+        let token_data = TokenData { token, claims };
         Ok(token_data)
     }
 
@@ -100,7 +100,7 @@ impl JwtProvider for RsaJwtProvider {
         // Создаём токен
         let token = encode(&Header::new(Algorithm::RS256), &claims, &self.encoding_key)?;
         // Возвращаем токен
-        let token_data = TokenData {token, claims};
+        let token_data = TokenData { token, claims };
         Ok(token_data)
     }
 
